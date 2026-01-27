@@ -1,7 +1,7 @@
 ---
 name: testing-strategy
 description: Guidelines for writing effective tests in this project
-author: block
+author: goose
 version: "1.0"
 tags:
   - testing
