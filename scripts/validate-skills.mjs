@@ -75,6 +75,7 @@ const ALLOW_EXTENSIONS = new Set([
   ".tsx",
   ".jsx",
   ".css",
+  ".mjs",
   ".html",
 ]);
 
