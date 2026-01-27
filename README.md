@@ -1,36 +1,59 @@
-# Agent-Skills README
+# Agent Skills
 
-Congrats, project leads! You got a new project to grow!
+A collection of reusable **Agent Skills** maintained by Block to help AI agents perform real-world tasks more effectively.
 
-This stub is meant to help you form a strong community around your work. It's yours to adapt, and may 
-diverge from this initial structure. Just keep the files seeded in this repo, and the rest is yours to evolve! 
+These skills are designed to be:
+- ✅ Portable across agents (Goose, Claude Desktop, and others that support agent skills)
+- ✅ Easy to install
+- ✅ Easy to understand before installing
+- ✅ Community-extensible
 
-## Introduction
+---
 
-Orient users to the project here. This is a good place to start with an assumption
-that the user knows very little - so start with the Big Picture and show how this
-project fits into it.
+## What are Agent Skills?
 
-Then maybe a dive into what this project does.
+Agent Skills are reusable sets of instructions and supporting resources that teach an AI agent how to perform a specific workflow or task.
 
-Diagrams and other visuals are helpful here. Perhaps code snippets showing usage.
+A skill might include:
+- A structured checklist (e.g. code review)
+- A workflow (e.g. deploying a service)
+- Domain knowledge (e.g. using a specific API)
+- Supporting files like scripts, templates, or examples
 
-Project leads should complete, alongside this `README`:
+Each skill lives in its own folder and includes a `SKILL.md` file.
 
-* [CODEOWNERS](./CODEOWNERS) - set project lead(s)
-* [CONTRIBUTING.md](./CONTRIBUTING.md) - Fill out how to: install prereqs, build, test, run, access CI, chat, discuss, file issues
-* [Bug-report.md](.github/ISSUE_TEMPLATE/bug-report.md) - Fill out `Assignees` add codeowners @names
-* [config.yml](.github/ISSUE_TEMPLATE/config.yml) - remove "(/add your discord channel..)" and replace the url with your Discord channel if applicable
+---
 
-The other files in this template repo may be used as-is:
+## Installing a Skill
 
-* [GOVERNANCE.md](./GOVERNANCE.md)
-* [LICENSE](./LICENSE)
+You can install skills using the `skills` CLI:
 
-## Project Resources
+```bash
+npx skills add https://github.com/block/Agent-Skills --skill api-setup
+```
+Make sure you have the built in skills extension enabled
 
-| Resource                                   | Description                                                                    |
-| ------------------------------------------ | ------------------------------------------------------------------------------ |
-| [CODEOWNERS](./CODEOWNERS)                 | Outlines the project lead(s)                                                   |
-| [GOVERNANCE.md](./GOVERNANCE.md)           | Project governance                                                             |
-| [LICENSE](./LICENSE)                       | Apache License, Version 2.0                                                    |
+This will install the skill locally so compatible agents (like Goose or Claude Desktop) can automatically load and use it.
+
+## Browse Skills
+
+You can browse all available skills via the Goose Skills Marketplace:
+👉 https://block.github.io/goose/skills
+
+There you can:
+
+- Read the full skill before installing
+
+- Copy the install command
+
+- View source on GitHub
+
+## Contributing a Skill
+
+We welcome community contributions!
+
+You can contribute in two ways:
+
+- External skills: Keep your own repo and submit it to be listed in the marketplace
+
+- Block hosted skills: Contribute directly to this repo via pull request
