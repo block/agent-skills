@@ -3,7 +3,6 @@ name: testing-strategy
 description: Guidelines for writing effective tests in this project
 author: block
 version: "1.0"
-status: stable
 tags:
   - testing
   - development

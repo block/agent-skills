@@ -3,7 +3,6 @@ name: api-setup
 description: Set up API integration with configuration and helper scripts
 author: block
 version: "1.0"
-status: experimental
 tags:
   - api
   - integration

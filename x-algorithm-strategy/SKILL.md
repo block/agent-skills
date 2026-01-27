@@ -3,7 +3,6 @@ name: X Algorithm Strategy
 description: Optimize X (Twitter) posts for the For You feed algorithm - provides scoring rules, content strategy, and post templates for developer audiences
 author: Angie Jones
 version: "1.0"
-status: stable
 tags:
   - social-media
   - marketing

@@ -3,7 +3,6 @@ name: code-review
 description: Comprehensive code review checklist for pull requests
 author: block
 version: "1.0"
-status: stable
 tags:
   - development
   - quality
