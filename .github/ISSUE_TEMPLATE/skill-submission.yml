@@ -1,0 +1,71 @@
+name: "Submit a Skill to the Marketplace"
+description: "Share an Agent Skill with the Goose community"
+title: "[Skill Submission]: "
+labels: ["skill-submission"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for sharing a skill with the Goose community! ✨
+
+        The marketplace currently supports **external skills only**:
+        - You keep your skill in your own repo  
+        - We list it in the marketplace and link to it  
+
+        Goose hosted skills are curated and maintained internally by the Goose devrel team.
+
+  - type: input
+    id: skill_name
+    attributes:
+      label: Skill Name
+      placeholder: e.g. code-review
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Short Description
+      description: One sentence describing what this skill does
+      placeholder: Helps review pull requests using a structured checklist
+    validations:
+      required: true
+
+  - type: input
+    id: repo_url
+    attributes:
+      label: GitHub Repository
+      description: Where your skill lives
+      placeholder: https://github.com/yourname/agent-skills
+    validations:
+      required: true
+
+  - type: input
+    id: install_command
+    attributes:
+      label: Install Command
+      description: Command users should run to install your skill
+      placeholder: npx skills add https://github.com/yourname/agent-skills --skill my-skill
+    validations:
+      required: true
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Additional Notes (optional)
+      description: Context, maturity level, known limitations, etc.
+      placeholder: This skill is experimental but works well for X workflows.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Contributor Checklist
+      options:
+        - label: My skill does not contain malicious code
+          required: true
+        - label: I understand my repo will be linked publicly in the marketplace
+          required: true
+        - label: I understand external skills are not maintained by the Goose team
+          required: true
