@@ -8,7 +8,6 @@ tags:
   - testing
   - development
   - quality
-source_url: https://github.com/block/goose
 ---
 
 # Testing Guidelines

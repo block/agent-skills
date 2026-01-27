@@ -8,7 +8,6 @@ tags:
   - api
   - integration
   - setup
-source_url: https://github.com/block/goose
 ---
 
 # API Setup
