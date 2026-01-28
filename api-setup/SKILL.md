@@ -1,6 +1,6 @@
 ---
 name: api-setup
-description: API integration with configuration and helper scripts
+description: API integration with configuration and helper scripts 2
 author: goose
 version: "1.0"
 tags:
