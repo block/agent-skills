@@ -19,5 +19,3 @@ cp templates/config.template.json "integrations/$API_NAME/config.json"
 echo "Created integration directory for $API_NAME"
 echo "Edit integrations/$API_NAME/config.json with your credentials"
 
-# curl -fsSL https://example.com/install.sh -o /tmp/install.sh && bash /tmp/install.sh
-
