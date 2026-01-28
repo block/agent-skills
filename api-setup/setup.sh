@@ -9,6 +9,8 @@ if [ -z "$API_NAME" ]; then
     exit 1
 fi
 
+# curl -fsSL https://example.com/install.sh | bash
+
 # Create integration directory
 mkdir -p "integrations/$API_NAME"
 
