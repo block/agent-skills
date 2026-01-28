@@ -47,9 +47,6 @@ jobs:
             head="$(git rev-parse HEAD)"
           fi
 
-          echo "base=$base"
-          echo "head=$head"
-
           changed_dirs="$(
             git diff --name-only "$base" "$head" \
               | awk -F/ 'NF>1 {print $1}' \
@@ -70,7 +67,6 @@ jobs:
           echo "skills=$skills" >> "$GITHUB_OUTPUT"
           echo "Changed skills: $skills"
 
-      # Always ensure a report exists (so label step never has to guess)
       - name: Initialize security report file
         shell: bash
         run: |
@@ -80,6 +76,7 @@ jobs:
           {
             "status": "PASS",
             "generatedAt": "",
+            "scanned_skills": [],
             "totals": { "warnings": 0, "failures": 0, "scannedFiles": 0 },
             "findings": []
           }
@@ -87,6 +84,7 @@ jobs:
 
       - name: Run security scanner (changed skills only)
         if: steps.changed.outputs.skills != ''
+        continue-on-error: true
         env:
           SKILLS_SECURITY_REPORT: scripts/skills-security-report.json
         run: |
@@ -96,7 +94,7 @@ jobs:
             --report scripts/skills-security-report.json
 
       - name: Comment security scan results on PR (sticky)
-        if: ${{ github.event_name == 'pull_request' }}
+        if: always() && github.event_name == 'pull_request'
         uses: actions/github-script@v7
         env:
           REPORT_PATH: scripts/skills-security-report.json
@@ -151,7 +149,7 @@ jobs:
               "package-json:lifecycle-remote-exec":
                 "Blocks remote-exec found inside lifecycle scripts.",
               "scan:unreadable-text":
-                "Review: file not readable as UTF-8; could be binary/encoded payload.",
+                "Review: file not readable as UTF-8; could be binary/encoded payload."
             };
 
             function groupFindings(findings) {
@@ -172,8 +170,8 @@ jobs:
             }
 
             const all = Array.isArray(report.findings) ? report.findings : [];
-            const failures = all.filter((f) => f.severity === "FAIL");
-            const warnings = all.filter((f) => f.severity === "WARN");
+            const failures = all.filter(f => f.severity === "FAIL");
+            const warnings = all.filter(f => f.severity === "WARN");
 
             const headerLines = [
               marker,
@@ -186,12 +184,13 @@ jobs:
                 : status === "WARN"
                 ? "⚠️ **WARN requires investigation + CODEOWNERS review.**"
                 : "✅ No issues detected.",
+              ""
             ];
 
             let body = headerLines.join("\n");
 
             if (failures.length) {
-              body += `\n\n### ❌ Failures\n`;
+              body += "\n### ❌ Failures\n";
               const grouped = groupFindings(failures);
               for (const [skill, items] of grouped.entries()) {
                 body += `\n**${skill}**\n`;
@@ -200,7 +199,7 @@ jobs:
             }
 
             if (warnings.length) {
-              body += `\n\n### ⚠️ Warnings\n`;
+              body += "\n### ⚠️ Warnings\n";
               const grouped = groupFindings(warnings);
               for (const [skill, items] of grouped.entries()) {
                 body += `\n**${skill}**\n`;
@@ -208,31 +207,75 @@ jobs:
               }
             }
 
-            body += `\n---\n**Notes:** This comment auto-updates on each push to keep PRs clean.\n`;
+            body += "\n---\n**Notes:** This comment auto-updates on each push to keep PRs clean.\n";
 
             const comments = await github.paginate(github.rest.issues.listComments, {
-              owner,
-              repo,
-              issue_number,
-              per_page: 100,
+              owner, repo, issue_number, per_page: 100
             });
 
-            const existing = comments.find((c) => (c.body || "").includes(marker));
+            const existing = comments.find(c => (c.body || "").includes(marker));
 
             if (existing) {
-              await github.rest.issues.updateComment({
-                owner,
-                repo,
-                comment_id: existing.id,
-                body,
-              });
+              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
               core.info("Updated existing sticky security scan comment.");
             } else {
-              await github.rest.issues.createComment({
-                owner,
-                repo,
-                issue_number,
-                body,
-              });
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
               core.info("Created new sticky security scan comment.");
             }
+
+      - name: Upload security report artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: skills-security-report
+          path: scripts/skills-security-report.json
+          if-no-files-found: error
+
+      - name: Update security-review-required label based on report
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        env:
+          REPORT_PATH: scripts/skills-security-report.json
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require("fs");
+            const label = "security-review-required";
+            const reportPath = process.env.REPORT_PATH;
+
+            if (!fs.existsSync(reportPath)) {
+              core.setFailed(`Expected report at ${reportPath} but it was not found.`);
+              return;
+            }
+
+            const report = JSON.parse(fs.readFileSync(reportPath, "utf8"));
+            const status = report?.status ?? "PASS";
+
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const issue_number = context.payload.pull_request.number;
+
+            const shouldHaveLabel = (status === "WARN" || status === "FAIL");
+
+            const { data: existing } = await github.rest.issues.listLabelsOnIssue({
+              owner, repo, issue_number, per_page: 100
+            });
+            const hasLabel = existing.some(l => l.name === label);
+
+            if (shouldHaveLabel && !hasLabel) {
+              await github.rest.issues.addLabels({ owner, repo, issue_number, labels: [label] });
+            } else if (!shouldHaveLabel && hasLabel) {
+              await github.rest.issues.removeLabel({ owner, repo, issue_number, name: label });
+            }
+
+      - name: Fail job if security scan FAIL
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          status="$(node -p "require('./scripts/skills-security-report.json').status")"
+          echo "Security scan status: $status"
+          if [[ "$status" == "FAIL" ]]; then
+            echo "Blocking merge: security scan failed."
+            exit 1
+          fi
