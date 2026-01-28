@@ -70,7 +70,10 @@ const FAIL_PATTERNS = [
   { id: "remote-exec:python-inline-url", re: /\bpython\d?\s+-c\s+["'][^"']*(https?:\/\/)[^"']*["']/i },
 
   // download-to-disk then execute (common evasion of pipe-to-shell)
-  { id: "remote-exec:curl-to-file-then-shell", re: /\b(curl|wget)\b[^\n\r]*(?:-o|--output|-O)\s+\S+[^\n\r]*(?:&&|;)\s*(bash|sh|zsh)\b/i },
+  {
+    id: "remote-exec:curl-to-file-then-shell",
+    re: /\b(curl|wget)\b[^\n\r]*(?:-o|--output|-O)\s+\S+[^\n\r]*(?:&&|;)\s*(bash|sh|zsh)\b/i,
+  },
 ];
 
 // ---- WARN patterns (CODEOWNERS review) ----
@@ -215,6 +218,41 @@ function ensureDir(p) {
   fs.mkdirSync(path.dirname(p), { recursive: true });
 }
 
+function normalizeFindings(findings) {
+  // De-dupe exact duplicates
+  const seen = new Set();
+  const deduped = [];
+  for (const f of findings) {
+    const key = [
+      f.severity,
+      f.ruleId,
+      f.skill,
+      f.file,
+      f.line ?? "",
+      f.snippet ?? "",
+    ].join("|");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(f);
+  }
+
+  // If a line has a FAIL, drop network:* WARNs on that same line
+  const failLoc = new Set(
+    deduped
+      .filter((f) => f.severity === "FAIL")
+      .map((f) => `${f.skill}|${f.file}|${f.line ?? ""}`)
+  );
+
+  const cleaned = deduped.filter((f) => {
+    if (f.severity !== "WARN") return true;
+    if (!String(f.ruleId || "").startsWith("network:")) return true;
+    const loc = `${f.skill}|${f.file}|${f.line ?? ""}`;
+    return !failLoc.has(loc);
+  });
+
+  return cleaned;
+}
+
 function main() {
   const allSkillDirs = getAllSkillDirs();
 
@@ -248,13 +286,12 @@ function main() {
       try {
         const pkgRaw = fs.readFileSync(pkgFile.abs, "utf8");
         const pkg = JSON.parse(pkgRaw);
-        const scripts = (pkg && pkg.scripts && typeof pkg.scripts === "object") ? pkg.scripts : null;
+        const scripts = pkg && pkg.scripts && typeof pkg.scripts === "object" ? pkg.scripts : null;
 
         if (scripts) {
           const hookKeys = Object.keys(scripts).filter((k) => PACKAGE_JSON_HOOK_KEYS.has(k));
           if (hookKeys.length > 0) {
             // WARN: lifecycle scripts exist (review required)
-            report.totals.warnings += 1;
             report.findings.push({
               severity: "WARN",
               skill: skillName,
@@ -268,7 +305,6 @@ function main() {
               const value = String(scripts[key] ?? "");
               for (const p of FAIL_PATTERNS) {
                 if (p.re.test(value)) {
-                  report.totals.failures += 1;
                   report.findings.push({
                     severity: "FAIL",
                     skill: skillName,
@@ -284,7 +320,6 @@ function main() {
           }
         }
       } catch (e) {
-        report.totals.warnings += 1;
         report.findings.push({
           severity: "WARN",
           skill: skillName,
@@ -304,7 +339,6 @@ function main() {
       try {
         content = fs.readFileSync(abs, "utf8");
       } catch {
-        report.totals.warnings += 1;
         report.findings.push({
           severity: "WARN",
           skill: skillName,
@@ -322,7 +356,6 @@ function main() {
         const hits = findAllMatchesWithContext(content, p.re);
         if (hits.length > 0) {
           for (const h of hits) {
-            report.totals.failures += 1;
             report.findings.push({
               severity: "FAIL",
               skill: skillName,
@@ -344,7 +377,6 @@ function main() {
           if (p.id.startsWith("prompt-injection:")) injectionWarnHit = true;
 
           for (const h of hits) {
-            report.totals.warnings += 1;
             report.findings.push({
               severity: "WARN",
               skill: skillName,
@@ -366,7 +398,6 @@ function main() {
             const sensitiveHits = findAllMatchesWithContext(content, re);
             const h = sensitiveHits[0];
 
-            report.totals.failures += 1;
             report.findings.push({
               severity: "FAIL",
               skill: skillName,
@@ -381,6 +412,13 @@ function main() {
       }
     }
   }
+
+  // Normalize findings to reduce noise (de-dupe + suppress network WARNs when a FAIL exists on same line)
+  report.findings = normalizeFindings(report.findings);
+
+  // Recompute totals from normalized findings
+  report.totals.warnings = report.findings.filter((f) => f.severity === "WARN").length;
+  report.totals.failures = report.findings.filter((f) => f.severity === "FAIL").length;
 
   if (report.totals.failures > 0) report.status = "FAIL";
   else if (report.totals.warnings > 0) report.status = "WARN";
