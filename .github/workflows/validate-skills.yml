@@ -26,20 +26,21 @@ jobs:
       (github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name != github.repository) ||
       (github.event_name == 'push')
     runs-on: ubuntu-latest
+
     steps:
-      # For fork PRs (pull_request_target): check out the contributor’s code by SHA (safe pattern)
-      - name: Checkout PR (fork-safe)
+      # ✅ Trusted checkout (base repo)
+      - name: Checkout base repo (trusted)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # ✅ Untrusted checkout (PR head) into ./pr (ONLY for reading files)
+      - name: Checkout PR head into ./pr (untrusted)
         if: github.event_name == 'pull_request_target'
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
-          fetch-depth: 0
-
-      # For in-org PRs + pushes: normal checkout
-      - name: Checkout
-        if: github.event_name != 'pull_request_target'
-        uses: actions/checkout@v4
-        with:
+          ref: refs/pull/${{ github.event.pull_request.number }}/head
+          path: pr
           fetch-depth: 0
 
       - uses: actions/setup-node@v4
@@ -54,17 +55,23 @@ jobs:
 
           IGNORE_DIRS_REGEX='^(\.git|\.github|scripts|node_modules)(/|$)'
 
-          if [[ "${{ github.event_name }}" == "pull_request" || "${{ github.event_name }}" == "pull_request_target" ]]; then
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
             BASE="${{ github.event.pull_request.base.sha }}"
             HEAD="${{ github.event.pull_request.head.sha }}"
             CHANGED_FILES="$(git diff --name-only --diff-filter=AM "$BASE..$HEAD" || true)"
+
+          elif [[ "${{ github.event_name }}" == "pull_request_target" ]]; then
+            # diff inside the fork checkout (./pr) so BASE..HEAD exist there
+            BASE="${{ github.event.pull_request.base.sha }}"
+            HEAD="${{ github.event.pull_request.head.sha }}"
+            CHANGED_FILES="$(git -C pr diff --name-only --diff-filter=AM "$BASE..$HEAD" || true)"
+
           else
             BEFORE="${{ github.event.before }}"
             AFTER="${{ github.event.after }}"
             CHANGED_FILES="$(git diff --name-only --diff-filter=AM "$BEFORE..$AFTER" || true)"
           fi
 
-          # Top-level dirs only (skills are top-level folders)
           SKILL_DIRS="$(echo "$CHANGED_FILES" \
             | awk -F/ 'NF>1 {print $1}' \
             | grep -Ev "$IGNORE_DIRS_REGEX" \
@@ -76,7 +83,7 @@ jobs:
 
           echo "changed_skills=$SKILL_DIRS" >> "$GITHUB_OUTPUT"
 
-          if [ -z "$SKILL_DIRS" ]; then
+          if [[ -z "$SKILL_DIRS" ]]; then
             echo "No changed skill directories detected."
           else
             echo "Changed skill dirs: $SKILL_DIRS"
@@ -98,15 +105,26 @@ jobs:
           }
           JSON
 
-      - name: Validate changed skills only
+      - name: Validate changed skills only (same-repo PRs + push)
         id: validate
-        if: steps.changed.outputs.changed_skills != ''
+        if: steps.changed.outputs.changed_skills != '' && github.event_name != 'pull_request_target'
         env:
           SKILLS_VALIDATION_REPORT: ${{ runner.temp }}/skills-validation-report.json
         run: |
           node scripts/validate-skills.mjs \
             --skills "${{ steps.changed.outputs.changed_skills }}" \
             --report "${SKILLS_VALIDATION_REPORT}"
+
+      - name: Validate changed skills only (fork PRs via ./pr)
+        id: validate_fork
+        if: steps.changed.outputs.changed_skills != '' && github.event_name == 'pull_request_target'
+        env:
+          SKILLS_VALIDATION_REPORT: ${{ runner.temp }}/skills-validation-report.json
+        run: |
+          node scripts/validate-skills.mjs \
+            --skills "${{ steps.changed.outputs.changed_skills }}" \
+            --report "${SKILLS_VALIDATION_REPORT}"
+        working-directory: pr
 
       - name: Upload validation report
         if: always()
@@ -119,7 +137,7 @@ jobs:
           retention-days: 10
 
       # Label ONLY when WARN/FAIL. Also remove it when clean.
-      # Note: this will run for pull_request_target (fork PRs) too, since it has write perms.
+      # Runs for pull_request_target (fork PRs) too, since it has write perms.
       - name: Update security-review-required label based on report
         if: always() && (github.event_name == 'pull_request' || github.event_name == 'pull_request_target')
         uses: actions/github-script@v7
@@ -147,7 +165,6 @@ jobs:
 
             const shouldHaveLabel = (warn > 0 || fail > 0);
 
-            // Fetch current labels to make add/remove idempotent
             const { data: existing } = await github.rest.issues.listLabelsOnIssue({
               owner, repo, issue_number, per_page: 100
             });

@@ -2,13 +2,47 @@
 import fs from "node:fs";
 import path from "node:path";
 
-const REPO_ROOT = process.cwd();
+/**
+ * CLI
+ *  --skills "skill-a,skill-b"     Scan only these skill dirs (changed-skills-only)
+ *  --report path/to/report.json   Override report path
+ *  --sarif  path/to/report.sarif  Also write SARIF (for GitHub code scanning)
+ *  --repo-root path               Treat this directory as repo root (fork-safe scanning)
+ */
+function parseArgs(argv) {
+  const args = { skills: null, report: null, sarif: null, repoRoot: null };
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === "--skills") args.skills = (argv[++i] || "").trim();
+    else if (a === "--report") args.report = (argv[++i] || "").trim();
+    else if (a === "--sarif") args.sarif = (argv[++i] || "").trim();
+    else if (a === "--repo-root") args.repoRoot = (argv[++i] || "").trim();
+  }
+  return args;
+}
+
+const {
+  skills: skillsArg,
+  report: reportArg,
+  sarif: sarifArg,
+  repoRoot: repoRootArg,
+} = parseArgs(process.argv.slice(2));
+
+// ✅ Use explicit repo root if provided (for fork-safe scanning)
+const REPO_ROOT = repoRootArg ? path.resolve(repoRootArg) : process.cwd();
 const SKILLS_ROOT = REPO_ROOT;
 
 const IGNORE_DIRS_AT_ROOT = new Set([".git", ".github", "scripts", "node_modules"]);
+
 const REPORT_PATH =
   process.env.SKILLS_SECURITY_REPORT ||
   path.join(REPO_ROOT, "scripts", "skills-security-report.json");
+
+const EFFECTIVE_REPORT_PATH = reportArg ? path.resolve(reportArg) : REPORT_PATH;
+
+// Default SARIF path: alongside JSON report, unless overridden or omitted
+const DEFAULT_SARIF_PATH = path.join(path.dirname(EFFECTIVE_REPORT_PATH), "skills-security-report.sarif");
+const EFFECTIVE_SARIF_PATH = sarifArg ? path.resolve(sarifArg) : null;
 
 // Scan only “text-like” stuff
 const SCAN_TEXT_EXTENSIONS = new Set([
@@ -34,24 +68,6 @@ const SCAN_TEXT_EXTENSIONS = new Set([
   ".css",
   ".sql",
 ]);
-
-/**
- * CLI
- *  --skills "skill-a,skill-b"   Scan only these skill dirs (changed-skills-only)
- *  --report path/to/report.json Override report path
- */
-function parseArgs(argv) {
-  const args = { skills: null, report: null };
-  for (let i = 0; i < argv.length; i++) {
-    const a = argv[i];
-    if (a === "--skills") args.skills = (argv[++i] || "").trim();
-    else if (a === "--report") args.report = (argv[++i] || "").trim();
-  }
-  return args;
-}
-
-const { skills: skillsArg, report: reportArg } = parseArgs(process.argv.slice(2));
-const EFFECTIVE_REPORT_PATH = reportArg || REPORT_PATH;
 
 // ---- FAIL patterns (block immediately) ----
 // NOTE: We keep these conservative. This is NOT a full malware detector.
@@ -205,8 +221,10 @@ function findAllMatchesWithContext(content, re) {
     const snippet = lineText.length > 240 ? lineText.slice(0, 240) + "…" : lineText;
 
     hits.push({ line: lineNumber, snippet });
+
     // Prevent infinite loops on zero-length matches
     if (m[0] === "") rg.lastIndex++;
+
     // Cap to avoid huge spam if a pattern matches tons
     if (hits.length >= 20) break;
   }
@@ -223,14 +241,7 @@ function normalizeFindings(findings) {
   const seen = new Set();
   const deduped = [];
   for (const f of findings) {
-    const key = [
-      f.severity,
-      f.ruleId,
-      f.skill,
-      f.file,
-      f.line ?? "",
-      f.snippet ?? "",
-    ].join("|");
+    const key = [f.severity, f.ruleId, f.skill, f.file, f.line ?? "", f.snippet ?? ""].join("|");
     if (seen.has(key)) continue;
     seen.add(key);
     deduped.push(f);
@@ -253,6 +264,81 @@ function normalizeFindings(findings) {
   return cleaned;
 }
 
+// ---------- SARIF helpers ----------
+function sarifLevelFromSeverity(sev) {
+  if (sev === "FAIL") return "error";
+  if (sev === "WARN") return "warning";
+  return "note";
+}
+
+function buildSarif(report) {
+  const toolName = "skills-security-scan";
+
+  // Collect rules from findings (unique by ruleId)
+  const rulesMap = new Map();
+  for (const f of report.findings || []) {
+    const ruleId = f.ruleId || "unknown";
+    if (rulesMap.has(ruleId)) continue;
+    rulesMap.set(ruleId, {
+      id: ruleId,
+      name: ruleId,
+      shortDescription: { text: ruleId },
+    });
+  }
+
+  const results = (report.findings || []).map((f) => {
+    const ruleId = f.ruleId || "unknown";
+
+    const region = f.line
+      ? {
+          startLine: Number(f.line),
+          startColumn: 1,
+        }
+      : undefined;
+
+    const physicalLocation = {
+      artifactLocation: { uri: f.file },
+      ...(region ? { region } : {}),
+    };
+
+    return {
+      ruleId,
+      level: sarifLevelFromSeverity(f.severity),
+      message: { text: f.message || ruleId },
+      locations: [{ physicalLocation }],
+      // Extra metadata helps the UI + triage; safe to include
+      properties: {
+        skill: f.skill,
+        severity: f.severity,
+      },
+      ...(f.snippet
+        ? {
+            partialFingerprints: {
+              // lightweight stable-ish string for dedupe
+              snippet: String(f.snippet).slice(0, 200),
+            },
+          }
+        : {}),
+    };
+  });
+
+  return {
+    $schema: "https://json.schemastore.org/sarif-2.1.0.json",
+    version: "2.1.0",
+    runs: [
+      {
+        tool: {
+          driver: {
+            name: toolName,
+            rules: Array.from(rulesMap.values()),
+          },
+        },
+        results,
+      },
+    ],
+  };
+}
+
 function main() {
   const allSkillDirs = getAllSkillDirs();
 
@@ -273,12 +359,18 @@ function main() {
     fs.writeFileSync(EFFECTIVE_REPORT_PATH, JSON.stringify(report, null, 2), "utf8");
     console.log("✅ No matching changed skill directories to scan. Wrote empty security report.");
     console.log(`📝 ${path.relative(REPO_ROOT, EFFECTIVE_REPORT_PATH)}`);
+
+    if (EFFECTIVE_SARIF_PATH) {
+      ensureDir(EFFECTIVE_SARIF_PATH);
+      fs.writeFileSync(EFFECTIVE_SARIF_PATH, JSON.stringify(buildSarif(report), null, 2), "utf8");
+      console.log(`🧾 Wrote SARIF: ${path.relative(REPO_ROOT, EFFECTIVE_SARIF_PATH)}`);
+    }
+
     process.exit(0);
   }
 
   for (const skillName of skillDirs) {
-    const skillPath = path.join(SKILLS_ROOT, skillName);
-    const files = walkDir(skillPath, skillName);
+    const files = walkDir(path.join(SKILLS_ROOT, skillName), skillName);
 
     // ---- package.json lifecycle hook checks (skill-scoped) ----
     const pkgFile = files.find((f) => path.basename(f.rel) === "package.json");
@@ -291,7 +383,6 @@ function main() {
         if (scripts) {
           const hookKeys = Object.keys(scripts).filter((k) => PACKAGE_JSON_HOOK_KEYS.has(k));
           if (hookKeys.length > 0) {
-            // WARN: lifecycle scripts exist (review required)
             report.findings.push({
               severity: "WARN",
               skill: skillName,
@@ -300,7 +391,6 @@ function main() {
               message: `package.json contains lifecycle scripts: ${hookKeys.join(", ")} (review required)`,
             });
 
-            // FAIL if any lifecycle script contains remote-exec fail patterns
             for (const key of hookKeys) {
               const value = String(scripts[key] ?? "");
               for (const p of FAIL_PATTERNS) {
@@ -311,7 +401,6 @@ function main() {
                     file: pkgFile.rel,
                     ruleId: PACKAGE_JSON_FAIL_RULE,
                     message: `Lifecycle script "${key}" contains blocked remote-exec pattern (${p.id})`,
-                    // best-effort “context” (not line based, but helpful)
                     snippet: value.length > 240 ? value.slice(0, 240) + "…" : value,
                   });
                 }
@@ -351,50 +440,42 @@ function main() {
 
       report.totals.scannedFiles += 1;
 
-      // FAIL patterns (with line/snippet)
       for (const p of FAIL_PATTERNS) {
         const hits = findAllMatchesWithContext(content, p.re);
-        if (hits.length > 0) {
-          for (const h of hits) {
-            report.findings.push({
-              severity: "FAIL",
-              skill: skillName,
-              file: rel,
-              ruleId: p.id,
-              message: "Remote exec / download-and-execute pattern detected",
-              line: h.line,
-              snippet: h.snippet,
-            });
-          }
+        for (const h of hits) {
+          report.findings.push({
+            severity: "FAIL",
+            skill: skillName,
+            file: rel,
+            ruleId: p.id,
+            message: "Remote exec / download-and-execute pattern detected",
+            line: h.line,
+            snippet: h.snippet,
+          });
         }
       }
 
-      // WARN patterns (with line/snippet)
       let injectionWarnHit = false;
       for (const p of WARN_PATTERNS) {
         const hits = findAllMatchesWithContext(content, p.re);
-        if (hits.length > 0) {
-          if (p.id.startsWith("prompt-injection:")) injectionWarnHit = true;
+        if (hits.length > 0 && p.id.startsWith("prompt-injection:")) injectionWarnHit = true;
 
-          for (const h of hits) {
-            report.findings.push({
-              severity: "WARN",
-              skill: skillName,
-              file: rel,
-              ruleId: p.id,
-              message: "Suspicious indicator detected (review required)",
-              line: h.line,
-              snippet: h.snippet,
-            });
-          }
+        for (const h of hits) {
+          report.findings.push({
+            severity: "WARN",
+            skill: skillName,
+            file: rel,
+            ruleId: p.id,
+            message: "Suspicious indicator detected (review required)",
+            line: h.line,
+            snippet: h.snippet,
+          });
         }
       }
 
-      // Escalate if prompt-injection + sensitive targets
       if (injectionWarnHit) {
         for (const re of SENSITIVE_TARGETS) {
           if (re.test(content)) {
-            // give reviewers a specific place to look: point to the first sensitive hit line if possible
             const sensitiveHits = findAllMatchesWithContext(content, re);
             const h = sensitiveHits[0];
 
@@ -413,16 +494,15 @@ function main() {
     }
   }
 
-  // Normalize findings to reduce noise (de-dupe + suppress network WARNs when a FAIL exists on same line)
   report.findings = normalizeFindings(report.findings);
 
-  // Recompute totals from normalized findings
   report.totals.warnings = report.findings.filter((f) => f.severity === "WARN").length;
   report.totals.failures = report.findings.filter((f) => f.severity === "FAIL").length;
 
   if (report.totals.failures > 0) report.status = "FAIL";
   else if (report.totals.warnings > 0) report.status = "WARN";
 
+  // Write JSON report
   ensureDir(EFFECTIVE_REPORT_PATH);
   fs.writeFileSync(EFFECTIVE_REPORT_PATH, JSON.stringify(report, null, 2), "utf8");
 
@@ -431,7 +511,13 @@ function main() {
     `📊 Status: ${report.status} | FAIL=${report.totals.failures} WARN=${report.totals.warnings} FILES=${report.totals.scannedFiles}`
   );
 
-  // Exit code: only FAIL blocks merges
+  // Write SARIF (optional, only if --sarif provided)
+  if (EFFECTIVE_SARIF_PATH) {
+    ensureDir(EFFECTIVE_SARIF_PATH);
+    fs.writeFileSync(EFFECTIVE_SARIF_PATH, JSON.stringify(buildSarif(report), null, 2), "utf8");
+    console.log(`🧾 Wrote SARIF: ${path.relative(REPO_ROOT, EFFECTIVE_SARIF_PATH)}`);
+  }
+
   process.exit(report.status === "FAIL" ? 1 : 0);
 }
 
