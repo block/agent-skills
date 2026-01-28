@@ -101,6 +101,7 @@ jobs:
             "findings": []
           }
           JSON
+          
       - name: Run security scanner (changed skills only)
         if: steps.changed.outputs.skills != ''
         continue-on-error: true
@@ -114,21 +115,24 @@ jobs:
               --repo-root pr \
               --skills "${{ steps.changed.outputs.skills }}" \
               --report scripts/skills-security-report.json \
-              --sarif  ../scripts/skills-security-report.sarif
+              --sarif  scripts/skills-security-report.sarif
           else
             # Normal PRs and pushes: scan current workspace
             node scripts/skills-security-scan.mjs \
               --skills "${{ steps.changed.outputs.skills }}" \
               --report scripts/skills-security-report.json \
-              --sarif  ../scripts/skills-security-report.sarif
+              --sarif  scripts/skills-security-report.sarif
           fi
-
+      
       - name: Upload SARIF to GitHub Code Scanning
         if: always() && steps.changed.outputs.skills != ''
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: scripts/skills-security-report.sarif
           category: skills-security-scan
+          # Tie results to the PR commit so annotations show in "Files changed"
+          sha: ${{ github.event.pull_request.head.sha }}
+          ref: refs/pull/${{ github.event.pull_request.number }}/head
     
 
       - name: Comment security scan results on PR (sticky)
