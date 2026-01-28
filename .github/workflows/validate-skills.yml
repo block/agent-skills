@@ -34,20 +34,22 @@ jobs:
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             BASE="${{ github.event.pull_request.base.sha }}"
             HEAD="${{ github.event.pull_request.head.sha }}"
-            CHANGED_FILES=$(git diff --name-only --diff-filter=AM "$BASE..$HEAD")
+            CHANGED_FILES="$(git diff --name-only --diff-filter=AM "$BASE..$HEAD" || true)"
           else
             BEFORE="${{ github.event.before }}"
             AFTER="${{ github.event.after }}"
-            CHANGED_FILES=$(git diff --name-only --diff-filter=AM "$BEFORE..$AFTER" || true)
+            CHANGED_FILES="$(git diff --name-only --diff-filter=AM "$BEFORE..$AFTER" || true)"
           fi
 
           # Top-level dirs only (skills are top-level folders)
-          SKILL_DIRS=$(echo "$CHANGED_FILES" \
+          SKILL_DIRS="$(echo "$CHANGED_FILES" \
             | awk -F/ 'NF>1 {print $1}' \
             | grep -Ev "$IGNORE_DIRS_REGEX" \
             | sort -u \
             | tr '\n' ',' \
-            | sed 's/,$//')
+            | sed 's/,$//' \
+            || true
+          )"
 
           echo "changed_skills=$SKILL_DIRS" >> "$GITHUB_OUTPUT"
 
@@ -56,6 +58,7 @@ jobs:
           else
             echo "Changed skill dirs: $SKILL_DIRS"
           fi
+
 
       # Always ensure a report file exists so downstream steps are stable.
       - name: Initialize validation report file
