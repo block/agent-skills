@@ -3,7 +3,10 @@ name: Skills Security Scan
 on:
   pull_request:
     types: [opened, synchronize, reopened]
+  pull_request_target:
+    types: [opened, synchronize, reopened]
   workflow_dispatch:
+
 
 concurrency:
   group: skills-scan-${{ github.event.pull_request.number || github.run_id }}
@@ -25,6 +28,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
 
       - name: Use Node
