@@ -310,13 +310,6 @@ jobs:
               await github.rest.issues.removeLabel({ owner, repo, issue_number, name: label });
             }
 
-      - name: Upload SARIF to Code Scanning
-        if: always()
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: scripts/skills-security-report.sarif
-          category: skills-security-scan
-
       - name: Fail job if security scan FAIL
         if: always()
         shell: bash
