@@ -62,6 +62,23 @@ If you’ve built a useful workflow, checklist, or guide that could help other a
 4. Commit your changes
 5. [Open a pull request](https://github.com/block/Agent-Skills/compare/main...your-branch?expand=1)  
 
+#### Skill requirements (quick version)
+
+Each skill must include a `SKILL.md` file with the following required frontmatter:
+
+```md
+---
+name: api-setup
+description: Set up API integration with configuration and helper scripts
+author: goose
+version: "1.0"
+tags:
+  - api
+  - integration
+  - setup
+---
+```
+
 For detailed guidelines, formatting rules, and examples, see the [full contribution guide](https://github.com/block/Agent-Skills/blob/main/CONTRIBUTING.md)
 
 
