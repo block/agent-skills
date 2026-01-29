@@ -1,6 +1,5 @@
 {
   "api_key": "YOUR_API_KEY_HERE",
-  "endpoint": "https://api.example.com/v1",
   "timeout": 30,
   "retry_attempts": 3
 }
