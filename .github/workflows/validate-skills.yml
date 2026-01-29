@@ -116,20 +116,26 @@ jobs:
         env:
           SKILLS_VALIDATION_REPORT: ${{ runner.temp }}/skills-validation-report.json
           SKILLS_VALIDATION_OUTPUT: ${{ runner.temp }}/skills-validation-output.txt
+          CHANGED_SKILLS: ${{ steps.changed.outputs.changed_skills }}
         shell: bash
         run: |
           set -euo pipefail
           set +e
 
-          node scripts/validate-skills.mjs \
-            --skills "${{ steps.changed.outputs.changed_skills }}" \
-            --report "${SKILLS_VALIDATION_REPORT}" \
-            2>&1 | tee "${SKILLS_VALIDATION_OUTPUT}"
+          # ✅ Allow only a comma-separated list of safe directory names
+          if [[ ! "$CHANGED_SKILLS" =~ ^[A-Za-z0-9._/-]+(,[A-Za-z0-9._/-]+)*$ ]]; then
+            echo "Invalid CHANGED_SKILLS value: $CHANGED_SKILLS"
+            code=2
+          else
+            node scripts/validate-skills.mjs \
+              --skills "$CHANGED_SKILLS" \
+              --report "$SKILLS_VALIDATION_REPORT" \
+              2>&1 | tee "$SKILLS_VALIDATION_OUTPUT"
+            code="${PIPESTATUS[0]}"
+          fi
 
-          code="${PIPESTATUS[0]}"
           set -e
 
-          # Force report summary to match the real result
           EXIT_CODE="$code" node -e "
             const fs=require('fs');
             const p=process.env.SKILLS_VALIDATION_REPORT;
@@ -148,7 +154,6 @@ jobs:
 
           exit 0
 
-
       - name: Validate changed skills only (fork PRs via ./pr)
         id: validate_fork
         if: steps.changed.outputs.changed_skills != '' && github.event_name == 'pull_request_target'
@@ -156,20 +161,28 @@ jobs:
         env:
           SKILLS_VALIDATION_REPORT: ${{ runner.temp }}/skills-validation-report.json
           SKILLS_VALIDATION_OUTPUT: ${{ runner.temp }}/skills-validation-output.txt
+          CHANGED_SKILLS: ${{ steps.changed.outputs.changed_skills }}
         shell: bash
         working-directory: pr
         run: |
           set -euo pipefail
           set +e
 
-          node scripts/validate-skills.mjs \
-            --skills "${{ steps.changed.outputs.changed_skills }}" \
-            --report "${SKILLS_VALIDATION_REPORT}" \
-            2>&1 | tee "${SKILLS_VALIDATION_OUTPUT}"
+          # ✅ Strictly validate: comma-separated skill dir names (no spaces, no weird chars)
+          if [[ ! "$CHANGED_SKILLS" =~ ^[A-Za-z0-9._/-]+(,[A-Za-z0-9._/-]+)*$ ]]; then
+            echo "Invalid CHANGED_SKILLS value: $CHANGED_SKILLS"
+            code=2
+          else
+            node scripts/validate-skills.mjs \
+              --skills "$CHANGED_SKILLS" \
+              --report "$SKILLS_VALIDATION_REPORT" \
+              2>&1 | tee "$SKILLS_VALIDATION_OUTPUT"
+            code="${PIPESTATUS[0]}"
+          fi
 
-          code="${PIPESTATUS[0]}"
           set -e
 
+          # Force report summary to match the real result
           EXIT_CODE="$code" node -e "
             const fs=require('fs');
             const p=process.env.SKILLS_VALIDATION_REPORT;
