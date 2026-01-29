@@ -120,30 +120,34 @@ jobs:
         run: |
           set -euo pipefail
           set +e
+
           node scripts/validate-skills.mjs \
             --skills "${{ steps.changed.outputs.changed_skills }}" \
             --report "${SKILLS_VALIDATION_REPORT}" \
             2>&1 | tee "${SKILLS_VALIDATION_OUTPUT}"
+
           code="${PIPESTATUS[0]}"
           set -e
 
-          if [[ "$code" != "0" ]]; then
-            node - <<'NODE'
-            const fs = require("fs");
-            const p = process.env.SKILLS_VALIDATION_REPORT;
-
-            let r = {};
-            try { r = JSON.parse(fs.readFileSync(p, "utf8")); } catch { r = {}; }
-
-            r.summary = r.summary || {};
-            r.summary.status = "FAILED";
-            r.summary.fail_count = (r.summary.fail_count || 0) + 1;
-
-            fs.writeFileSync(p, JSON.stringify(r, null, 2));
-            NODE
-          fi
+          # Force report summary to match the real result
+          EXIT_CODE="$code" node -e "
+            const fs=require('fs');
+            const p=process.env.SKILLS_VALIDATION_REPORT;
+            const code=Number(process.env.EXIT_CODE || 0);
+            const r=JSON.parse(fs.readFileSync(p,'utf8'));
+            r.summary=r.summary||{};
+            if (code!==0){
+              r.summary.status='FAILED';
+              r.summary.fail_count = Math.max(1, Number(r.summary.fail_count||0));
+            } else {
+              r.summary.status='PASSED';
+              r.summary.fail_count = Number(r.summary.fail_count||0);
+            }
+            fs.writeFileSync(p, JSON.stringify(r,null,2));
+          "
 
           exit 0
+
 
       - name: Validate changed skills only (fork PRs via ./pr)
         id: validate_fork
@@ -153,34 +157,36 @@ jobs:
           SKILLS_VALIDATION_REPORT: ${{ runner.temp }}/skills-validation-report.json
           SKILLS_VALIDATION_OUTPUT: ${{ runner.temp }}/skills-validation-output.txt
         shell: bash
+        working-directory: pr
         run: |
           set -euo pipefail
           set +e
+
           node scripts/validate-skills.mjs \
             --skills "${{ steps.changed.outputs.changed_skills }}" \
             --report "${SKILLS_VALIDATION_REPORT}" \
             2>&1 | tee "${SKILLS_VALIDATION_OUTPUT}"
+
           code="${PIPESTATUS[0]}"
           set -e
 
-          if [[ "$code" != "0" ]]; then
-            node - <<'NODE'
-            const fs = require("fs");
-            const p = process.env.SKILLS_VALIDATION_REPORT;
-
-            let r = {};
-            try { r = JSON.parse(fs.readFileSync(p, "utf8")); } catch { r = {}; }
-
-            r.summary = r.summary || {};
-            r.summary.status = "FAILED";
-            r.summary.fail_count = (r.summary.fail_count || 0) + 1;
-
-            fs.writeFileSync(p, JSON.stringify(r, null, 2));
-            NODE
-          fi
+          EXIT_CODE="$code" node -e "
+            const fs=require('fs');
+            const p=process.env.SKILLS_VALIDATION_REPORT;
+            const code=Number(process.env.EXIT_CODE || 0);
+            const r=JSON.parse(fs.readFileSync(p,'utf8'));
+            r.summary=r.summary||{};
+            if (code!==0){
+              r.summary.status='FAILED';
+              r.summary.fail_count = Math.max(1, Number(r.summary.fail_count||0));
+            } else {
+              r.summary.status='PASSED';
+              r.summary.fail_count = Number(r.summary.fail_count||0);
+            }
+            fs.writeFileSync(p, JSON.stringify(r,null,2));
+          "
 
           exit 0
-        working-directory: pr
 
       - name: Upload validation report
         if: always()
