@@ -24,11 +24,12 @@ bd version
 bd status
 ```
 
-**If `bd` is not installed**, the user can install it via:
+**If `bd` is not installed**, ask the user which installation method they prefer:
 - **npm:** `npm install -g @beads/bd`
-- **Homebrew:** `brew install beads`
+- **Homebrew:** `brew install beads` (macOS)
 - **Go:** `go install github.com/steveyegge/beads/cmd/bd@latest`
-- **Script:** `curl -fsSL https://raw.githubusercontent.com/steveyegge/beads/main/scripts/install.sh | bash`
+
+Do not install without user confirmation, as these are global system packages.
 
 **If not initialized in the project**, run:
 ```bash
