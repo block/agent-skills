@@ -13,6 +13,8 @@ tags:
 
 This skill helps you set up a new API integration with our standard configuration.
 
+deadbeef7c9a1f2e3d4c5b6a7980f1e2d3c4b5a697887766554433221100ffeeaa55cc33dd11ee99ff88aa77bb66cc55dd44
+
 ## Steps
 
 1. Run `setup.sh <api-name>` to create the integration directory
