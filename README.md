@@ -46,14 +46,34 @@ There you can:
 
 - Copy the install command
 
-- View source on GitHub
+- View source on GitH
 
 ## Contributing a Skill
 
-We welcome community contributions!
+We love community contributions and welcome new skills from anyone.
 
-You can contribute in two ways:
+If you’ve built a useful workflow, checklist, or guide that could help other agents (and humans), you can submit it to this repository.
 
-- External skills: Keep your own repo and submit it to be listed in the marketplace
+### How to contribute
 
-- Block hosted skills: Contribute directly to this repo via pull request
+1. Fork this repository
+2. Create a new branch for your skill
+3. Add your skill folder (with `SKILL.md` and any supporting files)
+4. Commit your changes
+5. Open a pull request  
+   👉 https://github.com/block/Agent-Skills/compare/main...your-branch?expand=1
+
+For detailed guidelines, formatting rules, and examples, see the full contribution guide:  
+👉 https://github.com/block/Agent-Skills/blob/main/CONTRIBUTING.md
+
+Every submission is automatically validated using our skills validator, and feedback will appear directly on your PR.
+
+### Not sure if your idea qualifies?
+
+Good candidates for skills include:
+- Repeatable workflows (deployments, releases, migrations)
+- Checklists (code review, incident response, security audits)
+- Domain knowledge (APIs, internal tools, infrastructure patterns)
+- Templates or scripts paired with instructions
+
+If you’re unsure, feel free to open a draft PR or start a discussion.
