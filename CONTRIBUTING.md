@@ -1,6 +1,7 @@
 # Contributing to Agent Skills
 
 Thank you for your interest in contributing an Agent Skill! 🎉
+
 This repository is a community-driven collection of reusable skills that help AI agents (like Goose, Claude Desktop, and others) perform real-world tasks more effectively.
 
 This guide explains:

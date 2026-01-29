@@ -60,11 +60,10 @@ If you’ve built a useful workflow, checklist, or guide that could help other a
 2. Create a new branch for your skill
 3. Add your skill folder (with `SKILL.md` and any supporting files)
 4. Commit your changes
-5. Open a pull request  
-   👉 https://github.com/block/Agent-Skills/compare/main...your-branch?expand=1
+5. [Open a pull request](https://github.com/block/Agent-Skills/compare/main...your-branch?expand=1)  
 
-For detailed guidelines, formatting rules, and examples, see the full contribution guide:  
-👉 https://github.com/block/Agent-Skills/blob/main/CONTRIBUTING.md
+For detailed guidelines, formatting rules, and examples, see the [full contribution guide](https://github.com/block/Agent-Skills/blob/main/CONTRIBUTING.md)
+
 
 Every submission is automatically validated using our skills validator, and feedback will appear directly on your PR.
 
