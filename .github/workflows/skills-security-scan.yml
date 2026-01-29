@@ -62,7 +62,7 @@ jobs:
 
           skills=""
           for d in $changed_dirs; do
-            if [[ -d "$d" ]]; then
+            if [[ -d "pr/$d" ]]; then
               if [[ -z "$skills" ]]; then skills="$d"; else skills="$skills,$d"; fi
             fi
           done
@@ -110,7 +110,7 @@ jobs:
           fi
      
       - name: Upload SARIF to GitHub Code Scanning
-        if: always() && steps.changed.outputs.skills != '' && steps.sarifcheck.outputs.ok == 'true
+        if: always() && steps.changed.outputs.skills != '' && steps.sarifcheck.outputs.ok == 'true'
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: scripts/skills-security-report.sarif
