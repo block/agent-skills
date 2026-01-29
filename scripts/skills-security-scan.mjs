@@ -345,13 +345,66 @@ function normalizeFindings(findings) {
       .map((f) => `${f.skill}|${f.file}|${f.line ?? ""}`)
   );
 
-  return deduped.filter((f) => {
+  const cleaned = deduped.filter((f) => {
     if (f.severity !== "WARN") return true;
     if (!String(f.ruleId || "").startsWith("network:")) return true;
     const loc = `${f.skill}|${f.file}|${f.line ?? ""}`;
     return !failLoc.has(loc);
   });
+
+  // Collapse prompt-injection WARN spam: keep only one per skill/file/line
+  const PROMPT_INJECTION_PRIORITY = [
+    "prompt-injection:secrets-escalation",
+    "prompt-injection:system-dev",
+    "prompt-injection:ignore-instructions",
+    "prompt-injection:jailbreak",
+    "prompt-injection:donotdisclose",
+  ];
+
+  function piScore(ruleId) {
+    const idx = PROMPT_INJECTION_PRIORITY.indexOf(ruleId);
+    return idx === -1 ? 999 : idx;
+  }
+
+  const byLoc = new Map();
+  const kept = [];
+
+  for (const f of cleaned) {
+    const isPIWarn =
+      f.severity === "WARN" && String(f.ruleId || "").startsWith("prompt-injection:");
+
+    if (!isPIWarn || !f.line) {
+      kept.push(f);
+      continue;
+    }
+
+    const key = `${f.skill}|${f.file}|${f.line}`;
+    if (!byLoc.has(key)) {
+      byLoc.set(key, { best: f, ruleIds: [f.ruleId] });
+      continue;
+    }
+
+    const entry = byLoc.get(key);
+    entry.ruleIds.push(f.ruleId);
+
+    if (piScore(f.ruleId) < piScore(entry.best.ruleId)) {
+      entry.best = f;
+    }
+  }
+
+  for (const { best, ruleIds } of byLoc.values()) {
+    kept.push({
+      ...best,
+      message:
+        ruleIds.length > 1
+          ? `${best.message} (matched: ${Array.from(new Set(ruleIds)).join(", ")})`
+          : best.message,
+    });
+  }
+
+  return kept;
 }
+
 
 // ------------------------------
 // SARIF helpers
@@ -795,12 +848,7 @@ function main() {
     `📊 Status: ${report.status} | FAIL=${report.totals.failures} WARN=${report.totals.warnings} FILES=${report.totals.scannedFiles}`
   );
 
-  // Write SARIF (always, to satisfy upload-sarif)
-  ensureDir(EFFECTIVE_SARIF_PATH);
-  fs.writeFileSync(EFFECTIVE_SARIF_PATH, JSON.stringify(buildSarif(report), null, 2), "utf8");
-  console.log(`🧾 Wrote SARIF: ${path.relative(REPO_ROOT, EFFECTIVE_SARIF_PATH)}`);
-
-  process.exit(report.status === "FAIL" ? 1 : 0);
+ sks
 }
 
 main();

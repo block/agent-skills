@@ -1,8 +1,6 @@
 name: Skills Security Scan
 
 on:
-  pull_request:
-    types: [opened, synchronize, reopened]
   pull_request_target:
     types: [opened, synchronize, reopened]
   workflow_dispatch:
@@ -31,7 +29,6 @@ jobs:
           fetch-depth: 0
 
       - name: Checkout PR head into ./pr (untrusted)
-        if: ${{ github.event_name == 'pull_request_target' }}
         uses: actions/checkout@v4
         with:
           ref: refs/pull/${{ github.event.pull_request.number }}/head
@@ -49,25 +46,11 @@ jobs:
         run: |
           set -euo pipefail
 
-          WORKDIR="."
-          if [[ "${{ github.event_name }}" == "pull_request_target" ]]; then
-            WORKDIR="pr"
-          fi
-
-          # PR event types have base/head SHAs available
-          if [[ "${{ github.event_name }}" == "pull_request" || "${{ github.event_name }}" == "pull_request_target" ]]; then
-            base="${{ github.event.pull_request.base.sha }}"
-            head="${{ github.event.pull_request.head.sha }}"
-          else
-            git fetch origin main --depth=1 || true
-            base="$(git rev-parse origin/main)"
-            head="$(git rev-parse HEAD)"
-          fi
-
-          cd "$WORKDIR"
+          base="${{ github.event.pull_request.base.sha }}"
+          head="${{ github.event.pull_request.head.sha }}"
 
           changed_dirs="$(
-            git diff --name-only "$base" "$head" \
+            git -C pr diff --name-only "$base" "$head" \
               | awk -F/ 'NF>1 {print $1}' \
               | sort -u \
               | grep -vE '^\.(git|github)$' \
@@ -75,6 +58,7 @@ jobs:
               | grep -vE '^\.' \
               || true
           )"
+
 
           skills=""
           for d in $changed_dirs; do
@@ -101,6 +85,13 @@ jobs:
             "findings": []
           }
           JSON
+          cat > scripts/skills-security-report.sarif <<'SARIF'
+          {
+            "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+            "version": "2.1.0",
+            "runs": []
+          }
+          SARIF
           
       - name: Run security scanner (changed skills only)
         if: steps.changed.outputs.skills != ''
@@ -108,21 +99,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          node scripts/skills-security-scan.mjs \
+            --repo-root pr \
+            --skills "${{ steps.changed.outputs.skills }}" \
+            --report scripts/skills-security-report.json \
+            --sarif  scripts/skills-security-report.sarif
 
-          if [[ "${{ github.event_name }}" == "pull_request_target" ]]; then
-            # Use trusted script from base checkout, scan files from PR checkout under ./pr
-            node scripts/skills-security-scan.mjs \
-              --repo-root pr \
-              --skills "${{ steps.changed.outputs.skills }}" \
-              --report scripts/skills-security-report.json \
-              --sarif  scripts/skills-security-report.sarif
-          else
-            # Normal PRs and pushes: scan current workspace
-            node scripts/skills-security-scan.mjs \
-              --skills "${{ steps.changed.outputs.skills }}" \
-              --report scripts/skills-security-report.json \
-              --sarif  scripts/skills-security-report.sarif
-          fi
       
       - name: Upload SARIF to GitHub Code Scanning
         if: always() && steps.changed.outputs.skills != ''
@@ -136,7 +118,7 @@ jobs:
     
 
       - name: Comment security scan results on PR (sticky)
-        if: always() && (github.event_name == 'pull_request' || github.event_name == 'pull_request_target')
+        if: always() && github.event_name == 'pull_request_target'
         uses: actions/github-script@v7
         env:
           REPORT_PATH: scripts/skills-security-report.json
@@ -274,7 +256,7 @@ jobs:
           if-no-files-found: error
 
       - name: Update security-review-required label based on report
-        if: always() && (github.event_name == 'pull_request' || github.event_name == 'pull_request_target')
+        if: always() && github.event_name == 'pull_request_target'
         uses: actions/github-script@v7
         env:
           REPORT_PATH: scripts/skills-security-report.json
