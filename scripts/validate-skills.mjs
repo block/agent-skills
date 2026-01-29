@@ -8,6 +8,13 @@ const SKILLS_ROOT = REPO_ROOT;
 const MAX_FILE_BYTES = 1_000_000;
 const MAX_FILES_PER_SKILL = 400;
 
+// Binary masquerading sampling (keep fast + predictable)
+const TEXT_SAMPLE_MAX_BYTES = 64 * 1024;
+const MIN_PRINTABLE_RATIO = 0.8;
+// NOTE: validate-skills currently does FAIL-only reporting.
+// We log encoding weirdness as a warning to stdout (does not fail).
+const UTF8_REPLACEMENT_WARN_RATIO = 0.02;
+
 const DENY_FILENAMES = new Set([
   ".env",
   ".env.local",
@@ -76,6 +83,62 @@ const ALLOW_FILENAMES = new Set([
   "yarn.lock",
   ".gitignore",
 ]);
+
+// Detect "binary pretending to be text" using magic bytes + text-likeness heuristics
+const MAGIC = [
+  { name: "ELF", bytes: [0x7f, 0x45, 0x4c, 0x46] },
+  { name: "PE", bytes: [0x4d, 0x5a] }, // MZ
+  { name: "ZIP", bytes: [0x50, 0x4b, 0x03, 0x04] },
+  { name: "PDF", bytes: [0x25, 0x50, 0x44, 0x46] }, // %PDF
+  { name: "PNG", bytes: [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a] },
+  { name: "GZIP", bytes: [0x1f, 0x8b] },
+  { name: "WASM", bytes: [0x00, 0x61, 0x73, 0x6d] }, // \0asm
+];
+
+function detectMagic(buf) {
+  for (const m of MAGIC) {
+    if (buf.length >= m.bytes.length && m.bytes.every((b, i) => buf[i] === b)) return m.name;
+  }
+  return null;
+}
+
+function analyzeTextlikeness(buf) {
+  let nulFound = false;
+  let printable = 0;
+
+  for (let i = 0; i < buf.length; i++) {
+    const c = buf[i];
+    if (c === 0) nulFound = true;
+
+    // printable ASCII + common whitespace
+    const isPrintable =
+      (c >= 0x20 && c <= 0x7e) || c === 0x09 || c === 0x0a || c === 0x0d;
+    if (isPrintable) printable++;
+  }
+
+  const printableRatio = buf.length ? printable / buf.length : 1;
+
+  // best-effort encoding sanity check
+  const text = buf.toString("utf8");
+  const repl = (text.match(/\uFFFD/g) || []).length;
+  const replacementRatio = text.length ? repl / text.length : 0;
+
+  return { nulFound, printableRatio, replacementRatio };
+}
+
+function readFileSample(absPath, sizeBytes) {
+  const sampleSize = Math.min(TEXT_SAMPLE_MAX_BYTES, sizeBytes);
+  if (sampleSize <= 0) return Buffer.alloc(0);
+
+  const fd = fs.openSync(absPath, "r");
+  try {
+    const buf = Buffer.alloc(sampleSize);
+    fs.readSync(fd, buf, 0, sampleSize, 0);
+    return buf;
+  } finally {
+    fs.closeSync(fd);
+  }
+}
 
 const IGNORE_DIRS_AT_ROOT = new Set([".git", ".github", "scripts", "node_modules"]);
 
@@ -156,7 +219,11 @@ function validateSkillFrontmatter(skillName, fm) {
   }
 
   const tags = fm.tags;
-  if (!Array.isArray(tags) || tags.length === 0 || tags.some((t) => typeof t !== "string" || !t.trim())) {
+  if (
+    !Array.isArray(tags) ||
+    tags.length === 0 ||
+    tags.some((t) => typeof t !== "string" || !t.trim())
+  ) {
     fail(`${skillName}: frontmatter "tags" must be a non-empty list of strings`);
   }
 }
@@ -256,6 +323,54 @@ function main() {
 
       const st = fs.statSync(abs);
       if (st.size > MAX_FILE_BYTES) fail(`${skillName}: file too large (${st.size} bytes): ${rel}`);
+
+      // ---- Binary masquerading detection (FAIL fast) ----
+      // If it's an allowed "text-ish" file, ensure it actually looks like text.
+      const isTextAllowed =
+        base === "SKILL.md" ||
+        isAllowedByName ||
+        (ext && ALLOW_EXTENSIONS.has(ext));
+
+      if (isTextAllowed) {
+        try {
+          const buf = readFileSample(abs, st.size);
+          if (buf.length > 0) {
+            const magic = detectMagic(buf);
+            if (magic) {
+              fail(`${skillName}: binary masquerading detected (${magic}) in text file: ${rel}`);
+            }
+
+            const { nulFound, printableRatio, replacementRatio } = analyzeTextlikeness(buf);
+
+            if (nulFound) {
+              fail(`${skillName}: NUL byte found (binary content) in: ${rel}`);
+            }
+
+            if (printableRatio < MIN_PRINTABLE_RATIO) {
+              fail(
+                `${skillName}: low printable ratio (${printableRatio.toFixed(
+                  2
+                )}) in text file: ${rel}`
+              );
+            }
+
+            // This is a "warn" signal, but validate-skills is fail-only.
+            if (replacementRatio > UTF8_REPLACEMENT_WARN_RATIO) {
+              console.warn(
+                `⚠️ ${skillName}: suspicious encoding (UTF-8 replacement ratio ${(replacementRatio * 100).toFixed(
+                  2
+                )}%) in: ${rel}`
+              );
+            }
+          }
+        } catch (e) {
+          fail(
+            `${skillName}: could not sample file for binary masquerading checks: ${rel} (${
+              e?.message ?? String(e)
+            })`
+          );
+        }
+      }
     }
 
     if (!hadFailure) ok(`${skillName}: structure validated`);
