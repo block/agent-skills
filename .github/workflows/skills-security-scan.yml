@@ -85,13 +85,6 @@ jobs:
             "findings": []
           }
           JSON
-          cat > scripts/skills-security-report.sarif <<'SARIF'
-          {
-            "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
-            "version": "2.1.0",
-            "runs": []
-          }
-          SARIF
           
       - name: Run security scanner (changed skills only)
         if: steps.changed.outputs.skills != ''
@@ -104,10 +97,20 @@ jobs:
             --skills "${{ steps.changed.outputs.skills }}" \
             --report scripts/skills-security-report.json \
             --sarif  scripts/skills-security-report.sarif
-
       
-      - name: Upload SARIF to GitHub Code Scanning
+      - name: Check SARIF exists and is non-empty
         if: always() && steps.changed.outputs.skills != ''
+        id: sarifcheck
+        shell: bash
+        run: |
+          if [[ -s scripts/skills-security-report.sarif ]]; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          fi
+     
+      - name: Upload SARIF to GitHub Code Scanning
+        if: always() && steps.changed.outputs.skills != '' && steps.sarifcheck.outputs.ok == 'true
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: scripts/skills-security-report.sarif
