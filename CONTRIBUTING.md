@@ -69,7 +69,13 @@ Your file must start with YAML frontmatter containing at least:
 ```md
 ---
 name: api-setup
-description: Helps set up a new API integration with standard configuration
+description: Set up API integration with configuration and helper scripts
+author: goose
+version: "1.0"
+tags:
+- api
+- integration
+- setup
 ---
 ```
 
@@ -78,6 +84,9 @@ Guidelines:
 * `name` should match the folder name
 * Use lowercase with hyphens (`api-setup`, `code-review`)
 * `description` should be clear and concise (1 sentence)
+* `author` Creator of the skill (GitHub handle, name, or org)
+* `version` Must be a string (quote it), start at "1.0" and increment when you make updates
+* `tags` A list of keywords to help discovery in the marketplace, Use lowercase, short words or phrases
 
 ---
 
@@ -95,6 +104,12 @@ Skills are instructions for agents. Write them to be:
 ---
 name: production-deploy
 description: Safe deployment workflow for production releases
+author: your-name
+version: "1.0"
+tags:
+- deploy
+- release
+- production
 ---
 
 # Production Deployment
@@ -192,7 +207,7 @@ We prioritize skills that are:
 * Safe (no secrets, no destructive defaults)
 * Focused on one workflow or domain
 
-We may suggest revisions — that’s normal and part of the collaboration process.
+We may suggest revisions, that’s normal and part of the collaboration process.
 
 ---
 
