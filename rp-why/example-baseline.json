@@ -1,0 +1,26 @@
+{
+  "generated_at": "2026-02-04T06:43:11.121061",
+  "baseline_window_months": 6,
+  "period": {
+    "start": "2026-01-28",
+    "end": "2026-02-04",
+    "days": 7
+  },
+  "sessions_analyzed": 42,
+  "prompts_classified": 223,
+  "dok_distribution": {
+    "dok1": 4.9,
+    "dok2": 73.1,
+    "dok3": 18.8,
+    "dok4": 3.1
+  },
+  "average_dok_score": 2.2,
+  "estimated_stage": 5,
+  "trajectory": "stable",
+  "quadrant": "Underutilizing",
+  "growth_targets": {
+    "dok_target": 2.8,
+    "dok3_percentage_target": 35,
+    "dok1_percentage_max": 20
+  }
+}
