@@ -25,9 +25,24 @@ from collections import defaultdict
 class RPWhyBaseline:
     """Analyze Goose sessions for DOK baseline assessment"""
     
-    # Database and config paths
-    SESSIONS_DB = Path.home() / ".local/share/goose/sessions/sessions.db"
-    BASELINE_FILE = Path.home() / ".config/goose/rp-why-baseline.json"
+    # Database and config paths (cross-platform)
+    @staticmethod
+    def _get_sessions_db() -> Path:
+        """Get sessions database path (cross-platform)"""
+        import platform
+        if platform.system() == "Windows":
+            return Path(os.environ.get("LOCALAPPDATA", "")) / "goose" / "sessions" / "sessions.db"
+        else:
+            return Path.home() / ".local/share/goose/sessions/sessions.db"
+    
+    @staticmethod
+    def _get_baseline_file() -> Path:
+        """Get baseline file path (cross-platform)"""
+        import platform
+        if platform.system() == "Windows":
+            return Path(os.environ.get("LOCALAPPDATA", "")) / "goose" / "rp-why-baseline.json"
+        else:
+            return Path.home() / ".config/goose/rp-why-baseline.json"
     
     # DOK classification patterns
     DOK_PATTERNS = {
@@ -85,12 +100,12 @@ class RPWhyBaseline:
         
     def connect(self) -> bool:
         """Connect to the sessions database"""
-        if not self.SESSIONS_DB.exists():
-            print(f"❌ Sessions database not found at {self.SESSIONS_DB}")
+        if not self._get_sessions_db().exists():
+            print(f"❌ Sessions database not found at {self._get_sessions_db()}")
             return False
         
         try:
-            self.conn = sqlite3.connect(str(self.SESSIONS_DB))
+            self.conn = sqlite3.connect(str(self._get_sessions_db()))
             self.conn.row_factory = sqlite3.Row
             return True
         except sqlite3.Error as e:
@@ -363,8 +378,8 @@ class RPWhyBaseline:
     def save_baseline(self, baseline: Dict) -> bool:
         """Save baseline to config file"""
         try:
-            self.BASELINE_FILE.parent.mkdir(parents=True, exist_ok=True)
-            with open(self.BASELINE_FILE, 'w') as f:
+            self._get_baseline_file().parent.mkdir(parents=True, exist_ok=True)
+            with open(self._get_baseline_file(), 'w') as f:
                 json.dump(baseline, f, indent=2)
             return True
         except IOError as e:
@@ -373,11 +388,11 @@ class RPWhyBaseline:
     
     def load_baseline(self) -> Optional[Dict]:
         """Load existing baseline"""
-        if not self.BASELINE_FILE.exists():
+        if not self._get_baseline_file().exists():
             return None
         
         try:
-            with open(self.BASELINE_FILE, 'r') as f:
+            with open(self._get_baseline_file(), 'r') as f:
                 return json.load(f)
         except (IOError, json.JSONDecodeError) as e:
             print(f"❌ Error loading baseline: {e}")
@@ -520,7 +535,7 @@ class RPWhyBaseline:
         # Footer
         print("─" * 62)
         print(f"Baseline Generated: {baseline['generated_at'][:19]}")
-        print(f"Baseline saved to: {self.BASELINE_FILE}")
+        print(f"Baseline saved to: {self._get_baseline_file()}")
         print()
         print("💡 Run /rp-why after sessions to track progress against this baseline.")
         print("💡 Run /rp-why compare to see how your current session compares.")

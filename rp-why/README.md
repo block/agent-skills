@@ -1,36 +1,48 @@
 # rp-why: Gas Town × DOK Framework
 
-A self-reflection skill for AI agents that measures and improves AI collaboration practice.
+> **🪿 Goose-Specific Skill** — This skill is designed for [Goose](https://github.com/block/goose) and reads from Goose's session directory to analyze your AI collaboration patterns.
+
+A self-reflection framework that measures AI collaboration maturity (Gas Town stages) and cognitive complexity (DOK levels) to reveal growth opportunities.
+
+## Installation
+
+```bash
+npx skills add https://github.com/block/agent-skills --skill rp-why
+```
+
+Make sure you have the built-in skills extension enabled in Goose.
 
 ## Quick Start
 
-1. Run `/rp-why init` to establish your baseline
-2. Run `/rp-why current` at the end of sessions to see your DOK distribution
-3. Run `/rp-why compare` to track progress against your baseline
+```
+/rp-why current    # Analyze current session
+/rp-why init       # Generate baseline from history
+/rp-why compare    # Compare session to baseline
+```
 
-## What It Measures
+## What It Does
 
-- **Gas Town Stage**: How sophisticated are your AI tools? (1-8 scale)
-- **DOK Level**: How cognitively complex are your prompts? (1-4 scale)
-- **Quadrant Position**: Where do you fall on the integration matrix?
+- **Measures Gas Town Stage** (1-8): How sophisticated are your AI tools?
+- **Analyzes DOK Distribution** (1-4): How cognitively complex are your prompts?
+- **Identifies Your Quadrant**: Frontier, Growing, Thinking Ahead, Expected, Underutilizing, or Overpowered
+- **Provides Growth Nudges**: Actionable suggestions based on your position
 
-## Why Use This?
+## Requirements
 
-Without measurement, there's no improvement. This skill helps you:
+- [Goose](https://github.com/block/goose) AI agent
+- Goose sessions stored in the default session directory:
+  - **macOS/Linux**: `~/.local/share/goose/sessions/`
+  - **Windows**: `%LOCALAPPDATA%\goose\sessions\`
 
-- See patterns in your AI collaboration
-- Identify when you're underutilizing powerful tools
-- Get actionable nudges to level up your prompts
-- Track growth over time
+## Learn More
 
-## Files
+See [SKILL.md](./SKILL.md) for full documentation, including:
+- Theoretical foundations (Yegge's Gas Town, Webb's DOK)
+- Integration matrix and zone definitions
+- Target user profiles
+- Growth nudge system
 
-- `SKILL.md` - Main skill instructions for the agent
-- `rp_why_baseline.py` - Python tool for baseline analysis (optional)
-- `README.md` - This file
+## Attribution
 
-## Author
-
-Dakota Fabro ([@dakotafabro](https://github.com/dakotafabro))
-
-Block Engineering Fellowship, 2026
+- **Gas Town Stages**: Steve Yegge, "Welcome to Gas Town" (January 2026)
+- **DOK Levels**: Norman Webb (1997)
