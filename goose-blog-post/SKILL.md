@@ -284,7 +284,7 @@ When helping the author brainstorm or choose a direction, these formats tend to 
 
 A complete blog post:
 
-```markdown
+````markdown
 ---
 title: "Building a Custom MCP Server for Your Team"
 description: "A step-by-step guide to creating a Model Context Protocol server that connects goose to your team's internal tools."
@@ -306,10 +306,10 @@ Goose connects to tools through the Model Context Protocol (MCP). While there ar
 
 First, scaffold a new MCP server project:
 
-\`\`\`bash
+```bash
 npx create-mcp-server my-server
 cd my-server
-\`\`\`
+```
 
 ## Defining Your Tools
 
@@ -331,4 +331,4 @@ Building an MCP server took about an hour and saved our team countless context s
   <meta name="twitter:description" content="A step-by-step guide to creating a Model Context Protocol server that connects goose to your team's internal tools." />
   <meta name="twitter:image" content="https://block.github.io/goose/assets/images/banner-a1b2c3d4e5f6.png" />
 </head>
-```
+````
