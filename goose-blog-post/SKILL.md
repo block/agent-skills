@@ -175,7 +175,7 @@ The intro should:
 - Avoid marketing fluff; be genuine and specific
 - Use concrete examples and code snippets over abstract explanations
 
-**Goose-Specific Conventions:**
+**goose-Specific Conventions:**
 - Refer to the project as "goose" (lowercase) when referencing the tool
 - When linking to goose docs: `https://block.github.io/goose/`
 - When linking to the repo: `https://github.com/block/goose`
