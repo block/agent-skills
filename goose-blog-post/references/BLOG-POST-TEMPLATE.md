@@ -85,8 +85,8 @@ must be obtained from the local preview (see SKILL.md Step 6).
 
 ## Key URLs
 
-- Goose docs: https://block.github.io/goose/
-- Goose repo: https://github.com/block/goose
+- goose docs: https://block.github.io/goose/
+- goose repo: https://github.com/block/goose
 - Extensions directory: https://block.github.io/goose/extensions
 - MCP docs: https://modelcontextprotocol.io/introduction
 
