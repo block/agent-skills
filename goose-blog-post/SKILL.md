@@ -180,7 +180,6 @@ The intro should:
 - When linking to goose docs: `https://block.github.io/goose/`
 - When linking to the repo: `https://github.com/block/goose`
 - When linking to extensions: `https://block.github.io/goose/extensions`
-- When referencing MCP, spell out "Model Context Protocol" on first use
 
 #### 5. Social Metadata (`<head>` Section) — Required
 
