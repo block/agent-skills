@@ -11,7 +11,7 @@ tags:
   - content
 ---
 
-# Goose Blog Post
+# goose Blog Post
 
 Write blog posts for the [block/goose](https://github.com/block/goose) open-source project blog powered by Docusaurus.
 
@@ -173,7 +173,7 @@ The intro should:
 - Avoid marketing fluff; be genuine and specific
 - Use concrete examples and code snippets over abstract explanations
 
-**Goose-Specific Conventions:**
+**goose-Specific Conventions:**
 - Refer to the project as "goose" (lowercase) when referencing the tool
 - When linking to goose docs: `https://block.github.io/goose/`
 - When linking to the repo: `https://github.com/block/goose`
@@ -267,7 +267,7 @@ If your team has internal tools that aren't covered by existing extensions, buil
 
 ## Why Build a Custom MCP Server?
 
-Goose connects to tools through the Model Context Protocol (MCP). While there are hundreds of community extensions available, sometimes your team has unique internal tools that need a custom integration.
+goose connects to tools through the Model Context Protocol (MCP). While there are hundreds of community extensions available, sometimes your team has unique internal tools that need a custom integration.
 
 ## Getting Started
 
