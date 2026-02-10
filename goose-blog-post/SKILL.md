@@ -300,7 +300,7 @@ If your team has internal tools that aren't covered by existing extensions, buil
 
 ## Why Build a Custom MCP Server?
 
-Goose connects to tools through the Model Context Protocol (MCP). While there are hundreds of community extensions available, sometimes your team has unique internal tools that need a custom integration.
+goose connects to tools through the Model Context Protocol (MCP). While there are hundreds of community extensions available, sometimes your team has unique internal tools that need a custom integration.
 
 ## Getting Started
 
