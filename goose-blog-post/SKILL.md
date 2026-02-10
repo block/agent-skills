@@ -1,6 +1,6 @@
 ---
 name: goose-blog-post
-description: Write and publish blog posts for the block/goose open-source project
+description: Write and publish blog posts for the block/goose open source project
 author: angiejones
 version: "1.0"
 tags:
@@ -13,7 +13,7 @@ tags:
 
 # Goose Blog Post
 
-Write blog posts for the [block/goose](https://github.com/block/goose) open-source project blog powered by Docusaurus.
+Write blog posts for the [block/goose](https://github.com/block/goose) open source project blog powered by Docusaurus.
 
 ## Prerequisites
 
