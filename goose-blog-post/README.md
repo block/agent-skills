@@ -1,6 +1,6 @@
 # goose-blog-post
 
-A skill that guides AI agents through writing and publishing blog posts for the [block/goose](https://github.com/block/goose) open-source project.
+A skill that guides AI agents through writing and publishing blog posts for the [block/goose](https://github.com/block/goose) open source project.
 
 ## Installation
 
