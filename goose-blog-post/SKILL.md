@@ -29,18 +29,34 @@ gh repo clone block/goose
 
 ## Workflow
 
-### Step 1: Gather the Blog Post Details
+### Step 1: Determine the Writing Mode
+
+Ask the user how they want to work. There are three modes:
+
+1. **"I have a draft"** — The author has written (or will write) their own content. The agent scaffolds the directory, frontmatter, and image setup, then places the author's content into the correct format and reviews it against blog conventions.
+
+2. **"I have notes/an outline"** — The author has rough ideas, bullet points, or an outline. The agent expands these into a full draft while preserving the author's voice and key points. Present the draft for the author's review before finalizing.
+
+3. **"Write it for me"** — The author provides a topic and key points. The agent writes the full post. Present the draft for the author's review before finalizing.
+
+**Important:** For modes 1 and 2, the author's voice and intent take priority. Do not rewrite their content unnecessarily. Focus on structure, conventions, and polish — not on replacing their words.
+
+### Step 2: Gather the Blog Post Details
 
 Ask the user for the following (do not assume any of these):
 
 1. **Topic**: What is the blog post about?
 2. **Author**: Who is the author? (needs to match a key in `authors.yml`)
 3. **Target audience**: Who is this for? (developers, beginners, community, etc.)
+
+For modes 2 and 3, also ask:
 4. **Key points**: What are the main things the post should cover?
+5. **Tone**: Technical deep-dive, casual walkthrough, announcement, etc.?
 
-If the user provides a rough draft, outline, or notes — use those as the foundation.
+For mode 1, ask:
+4. **Where is the draft?** A file path, or ask them to paste it in.
 
-### Step 2: Verify Author Exists
+### Step 3: Verify Author Exists
 
 Check `<goose-repo>/documentation/blog/authors.yml` for the author key.
 
@@ -64,7 +80,7 @@ Ask the user for any missing details (name, title, GitHub username, social handl
 gh api users/<username> --jq '.id'
 ```
 
-### Step 3: Create the Blog Post Directory
+### Step 4: Create the Blog Post Directory
 
 Blog posts use the naming convention:
 
@@ -82,11 +98,11 @@ Rules:
 mkdir -p documentation/blog/YYYY-MM-DD-slug-title
 ```
 
-### Step 4: Write the Blog Post
+### Step 5: Assemble the Blog Post
 
-Create `index.md` inside the new directory with this structure:
+Create `index.md` inside the new directory. The file has four required sections in order:
 
-#### Frontmatter (Required)
+#### 1. Frontmatter
 
 ```markdown
 ---
@@ -104,7 +120,7 @@ Frontmatter rules:
 - Do **not** include a `date` field — Docusaurus extracts the date from the directory name
 - Do **not** include `tags` in frontmatter — the blog does not use Docusaurus tags
 
-#### Header Image (Required)
+#### 2. Header Image
 
 Every post **must** start with a header/banner image immediately after the frontmatter:
 
@@ -117,11 +133,11 @@ Every post **must** start with a header/banner image immediately after the front
 - Supported formats: `.png`, `.jpg`, `.webp`
 - Alt text should be descriptive
 
-If the user does not have an image ready, create a placeholder reference and remind them to add one before publishing. You can also offer to generate one if image generation tools are available.
+If the user does not have an image ready, add the image reference as a placeholder and remind them to add the file before publishing. You can also offer to generate one if image generation tools are available.
 
-#### Truncate Marker (Required)
+#### 3. Introduction + Truncate Marker
 
-Add the truncate marker after the introductory paragraph(s). This controls what appears as the preview on the blog index page:
+The intro paragraph(s) appear before the truncate marker. This controls the preview on the blog index page:
 
 ```markdown
 ![blog banner](banner.png)
@@ -129,13 +145,26 @@ Add the truncate marker after the introductory paragraph(s). This controls what 
 Your compelling introduction paragraph that hooks the reader.
 
 <!--truncate-->
-
-The rest of your post continues here...
 ```
 
-#### Content Body
+The intro should:
+- Hook the reader — why should they care?
+- Be 1-3 paragraphs max
+- Give enough context to decide whether to click through
 
-Write the post following these guidelines:
+#### 4. Content Body
+
+**For mode 1 (author's draft):** Place the author's content here. Adjust only what's needed to match the formatting conventions below. Flag any issues for the author rather than silently rewriting.
+
+**For modes 2 and 3:** Write the content following the guidelines below, then present the full draft to the author for review.
+
+**Formatting Conventions:**
+- Use `##` for major sections and `###` for subsections
+- Do **not** use `#` (h1) in the body — the title from frontmatter is the h1
+- Include code blocks with language identifiers (` ```python `, ` ```bash `, etc.)
+- Use bullet points and numbered lists to break up dense information
+- Short paragraphs (2-4 sentences) for readability
+- End with a clear takeaway, call-to-action, or next steps
 
 **Voice & Style:**
 - Write in first person when sharing personal experience, third person for announcements
@@ -143,15 +172,6 @@ Write the post following these guidelines:
 - The goose blog audience is developers — respect their intelligence
 - Avoid marketing fluff; be genuine and specific
 - Use concrete examples and code snippets over abstract explanations
-- Short paragraphs (2-4 sentences) for readability
-
-**Structure:**
-- Start with a hook — why should the reader care?
-- Use `##` for major sections and `###` for subsections
-- Do **not** use `#` (h1) in the body — the title from frontmatter is the h1
-- Include code blocks with language identifiers (` ```python `, ` ```bash `, etc.)
-- Use bullet points and numbered lists to break up dense information
-- End with a clear takeaway, call-to-action, or next steps
 
 **Goose-Specific Conventions:**
 - Refer to the project as "goose" (lowercase) when referencing the tool
@@ -160,15 +180,7 @@ Write the post following these guidelines:
 - When linking to extensions: `https://block.github.io/goose/extensions`
 - When referencing MCP, spell out "Model Context Protocol" on first use
 
-**Content Types That Work Well:**
-- Tutorials and how-tos ("How I built X with goose")
-- Deep dives into features or architecture
-- Community spotlights and contributor stories
-- Comparisons and thought leadership
-- Release announcements and changelogs
-- Tips, tricks, and workflow guides
-
-### Step 5: Social Media Image (Optional)
+### Step 6: Social Media Image (Optional)
 
 For social sharing previews, add an `image` field to the frontmatter:
 
@@ -182,17 +194,29 @@ image: ./social-banner.png
 ---
 ```
 
-This `image` is used for Open Graph / Twitter card previews when the post is shared on social media. It should be the same banner image or a dedicated social-optimized version.
+This `image` is used for Open Graph / Twitter card previews when the post is shared on social media. It can be the same banner image or a dedicated social-optimized version.
 
-### Step 6: Review Checklist
+### Step 7: Present the Draft for Review
 
-Before considering the post complete, verify:
+**This step is critical.** Before considering the post done:
+
+- Show the author the complete `index.md` content
+- Highlight any decisions you made (title wording, section structure, intro framing)
+- Ask if they want to adjust anything
+- For mode 1: call out any formatting changes you made and why
+
+Iterate based on feedback until the author is satisfied.
+
+### Step 8: Review Checklist
+
+Run through this checklist and fix any issues:
 
 - [ ] Directory follows `YYYY-MM-DD-slug-title/` naming convention
 - [ ] `index.md` exists in the directory
 - [ ] Frontmatter includes `title`, `description`, and `authors`
 - [ ] Author key exists in `authors.yml`
-- [ ] Banner image is included and referenced after frontmatter
+- [ ] Banner image is referenced after frontmatter
+- [ ] Banner image file exists in the directory (or flagged as needed)
 - [ ] `<!--truncate-->` marker is placed after the intro
 - [ ] No `#` (h1) headers in the body — only `##` and below
 - [ ] Code blocks have language identifiers
@@ -200,7 +224,7 @@ Before considering the post complete, verify:
 - [ ] Spelling and grammar are clean
 - [ ] Post reads well from start to finish
 
-### Step 7: Preview Locally (Optional)
+### Step 9: Preview Locally (Optional)
 
 Tell the user they can preview the post locally. Do **not** run this command directly — it blocks the terminal:
 
@@ -211,9 +235,21 @@ npm start
 
 This starts a local dev server at `http://localhost:3000` with hot reloading.
 
+## Content Types That Work Well
+
+When helping the author brainstorm or choose a direction, these formats tend to perform well on the goose blog:
+
+- **Tutorials and how-tos** — "How I built X with goose"
+- **Deep dives** — architecture, features, or design decisions
+- **Community spotlights** — contributor stories and use cases
+- **Comparisons** — goose vs. other tools, honest assessments
+- **Release announcements** — what's new and why it matters
+- **Tips and workflows** — power-user guides and productivity hacks
+- **Thought leadership** — opinions on AI agents, developer tools, open source
+
 ## Example
 
-Here is a complete minimal blog post:
+A complete minimal blog post:
 
 ```markdown
 ---
