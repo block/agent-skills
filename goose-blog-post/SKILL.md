@@ -211,7 +211,7 @@ Field reference:
 - `twitter:card` — always `summary_large_image`
 - `twitter:domain` — always `block.github.io`
 
-When first creating the post, add the `<head>` section as a placeholder with `IMAGE_URL_FROM_PREVIEW` for the image fields. It will be filled in after Step 6.
+When first creating the post, use `https://block.github.io/goose/assets/images/BANNER_FILENAME_WITH_HASH.png` as the placeholder for `og:image` and `twitter:image`. The `BANNER_FILENAME_WITH_HASH` portion will be replaced with the real filename after Step 6.
 
 ### Step 6: Preview Locally and Get the Image URL
 

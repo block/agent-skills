@@ -35,12 +35,12 @@ Conclusion and call-to-action here...
   <meta property="og:type" content="article" />
   <meta property="og:url" content="https://block.github.io/goose/blog/YYYY/MM/DD/slug-title" />
   <meta property="og:description" content="DESCRIPTION_HERE" />
-  <meta property="og:image" content="IMAGE_URL_FROM_PREVIEW" />
+  <meta property="og:image" content="https://block.github.io/goose/assets/images/FILENAME_FROM_PREVIEW" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta property="twitter:domain" content="block.github.io" />
   <meta name="twitter:title" content="TITLE_HERE" />
   <meta name="twitter:description" content="DESCRIPTION_HERE" />
-  <meta name="twitter:image" content="IMAGE_URL_FROM_PREVIEW" />
+  <meta name="twitter:image" content="https://block.github.io/goose/assets/images/FILENAME_FROM_PREVIEW" />
 </head>
 ```
 
