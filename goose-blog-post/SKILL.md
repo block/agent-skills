@@ -11,7 +11,7 @@ tags:
   - content
 ---
 
-# goose Blog Post
+# Goose Blog Post
 
 Write blog posts for the [block/goose](https://github.com/block/goose) open-source project blog powered by Docusaurus.
 
@@ -87,6 +87,7 @@ Blog posts use the naming convention:
 ```
 YYYY-MM-DD-slug-title/
   index.md
+  banner.png
 ```
 
 Rules:
@@ -100,7 +101,7 @@ mkdir -p documentation/blog/YYYY-MM-DD-slug-title
 
 ### Step 5: Assemble the Blog Post
 
-Create `index.md` inside the new directory. The file has four required sections in order:
+Create `index.md` inside the new directory. The file structure is:
 
 #### 1. Frontmatter
 
@@ -120,18 +121,19 @@ Frontmatter rules:
 - Do **not** include a `date` field — Docusaurus extracts the date from the directory name
 - Do **not** include `tags` in frontmatter — the blog does not use Docusaurus tags
 
-#### 2. Header Image
+#### 2. Banner Image
 
-Every post **must** start with a header/banner image immediately after the frontmatter:
+Every post **must** include a banner image immediately after the frontmatter:
 
 ```markdown
 ![blog banner](banner.png)
 ```
 
-- The image file lives in the same directory as `index.md`
-- Use a **1200×600** image
-- Supported formats: `.png`, `.jpg`, `.webp`
-- Alt text should be descriptive
+Banner image requirements:
+- **Dimensions:** 1200×600 pixels
+- **Location:** Same directory as `index.md`
+- **Filename:** `banner.png` (or `.jpg`, `.webp`)
+- **This same image is also used for social sharing** (Open Graph / Twitter cards) — there is no separate social image
 
 If the user does not have an image ready, add the image reference as a placeholder and remind them to add the file before publishing. You can also offer to generate one if image generation tools are available.
 
@@ -173,28 +175,69 @@ The intro should:
 - Avoid marketing fluff; be genuine and specific
 - Use concrete examples and code snippets over abstract explanations
 
-**goose-Specific Conventions:**
+**Goose-Specific Conventions:**
 - Refer to the project as "goose" (lowercase) when referencing the tool
 - When linking to goose docs: `https://block.github.io/goose/`
 - When linking to the repo: `https://github.com/block/goose`
 - When linking to extensions: `https://block.github.io/goose/extensions`
 - When referencing MCP, spell out "Model Context Protocol" on first use
 
-### Step 6: Social Media Image (Optional)
+#### 5. Social Metadata (`<head>` Section) — Required
 
-For social sharing previews, add an `image` field to the frontmatter:
+Every blog post **must** end with a `<head>` section containing Open Graph and Twitter card meta tags. This is placed at the very end of the `index.md` file, after all content:
 
-```markdown
----
-title: "Your Blog Post Title"
-description: "A concise summary of the post."
-authors:
-  - authorkey
-image: ./social-banner.png
----
+```html
+<head>
+  <meta property="og:title" content="YOUR TITLE HERE" />
+  <meta property="og:type" content="article" />
+  <meta property="og:url" content="https://block.github.io/goose/blog/YYYY/MM/DD/slug-title" />
+  <meta property="og:description" content="YOUR DESCRIPTION HERE" />
+  <meta property="og:image" content="https://block.github.io/goose/assets/images/BANNER_FILENAME_WITH_HASH.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta property="twitter:domain" content="block.github.io" />
+  <meta name="twitter:title" content="YOUR TITLE HERE" />
+  <meta name="twitter:description" content="YOUR DESCRIPTION HERE" />
+  <meta name="twitter:image" content="https://block.github.io/goose/assets/images/BANNER_FILENAME_WITH_HASH.png" />
+</head>
 ```
 
-This `image` is used for Open Graph / Twitter card previews when the post is shared on social media. It can be the same banner image or a dedicated social-optimized version.
+**Important:** The `og:image` and `twitter:image` URLs require a Docusaurus-generated filename that includes a content hash. You **cannot** guess this filename — it must be obtained from the local preview. See Step 6 for how to get it.
+
+Field reference:
+- `og:title` / `twitter:title` — same as the frontmatter `title`
+- `og:description` / `twitter:description` — same as the frontmatter `description`
+- `og:url` — the production URL: `https://block.github.io/goose/blog/YYYY/MM/DD/slug-title`
+- `og:image` / `twitter:image` — the static image URL obtained from local preview (see Step 6)
+- `twitter:card` — always `summary_large_image`
+- `twitter:domain` — always `block.github.io`
+
+When first creating the post, add the `<head>` section as a placeholder with `IMAGE_URL_FROM_PREVIEW` for the image fields. It will be filled in after Step 6.
+
+### Step 6: Preview Locally and Get the Image URL
+
+The author needs to preview the blog post locally to:
+1. Verify the post looks correct
+2. **Get the static image URL** needed for the `<head>` social metadata
+
+Tell the user to run this in a **separate terminal** (do **not** run this command directly — it blocks the terminal):
+
+```bash
+cd <goose-repo>/documentation
+npm start
+```
+
+This starts a local dev server at `http://localhost:3000` with hot reloading.
+
+Once the preview is running, instruct the user to:
+1. Navigate to their blog post in the browser
+2. Right-click the banner image → **Copy Image Address**
+3. The copied URL will be something like:
+   `http://localhost:3000/goose/assets/images/banner-a1b2c3d4e5f6.png`
+4. **Extract the filename** (e.g., `banner-a1b2c3d4e5f6.png`)
+5. Construct the production URL:
+   `https://block.github.io/goose/assets/images/banner-a1b2c3d4e5f6.png`
+
+Update the `<head>` section's `og:image` and `twitter:image` with this production URL.
 
 ### Step 7: Present the Draft for Review
 
@@ -207,7 +250,7 @@ This `image` is used for Open Graph / Twitter card previews when the post is sha
 
 Iterate based on feedback until the author is satisfied.
 
-### Step 8: Review Checklist
+### Step 8: Final Review Checklist
 
 Run through this checklist and fix any issues:
 
@@ -215,25 +258,16 @@ Run through this checklist and fix any issues:
 - [ ] `index.md` exists in the directory
 - [ ] Frontmatter includes `title`, `description`, and `authors`
 - [ ] Author key exists in `authors.yml`
-- [ ] Banner image is referenced after frontmatter
+- [ ] Banner image (1200×600) is referenced after frontmatter
 - [ ] Banner image file exists in the directory (or flagged as needed)
 - [ ] `<!--truncate-->` marker is placed after the intro
 - [ ] No `#` (h1) headers in the body — only `##` and below
 - [ ] Code blocks have language identifiers
 - [ ] Links to goose resources use the correct URLs
+- [ ] `<head>` section is present at the end of the file
+- [ ] `og:image` and `twitter:image` URLs are filled in from local preview
 - [ ] Spelling and grammar are clean
 - [ ] Post reads well from start to finish
-
-### Step 9: Preview Locally (Optional)
-
-Tell the user they can preview the post locally. Do **not** run this command directly — it blocks the terminal:
-
-```
-cd <goose-repo>/documentation
-npm start
-```
-
-This starts a local dev server at `http://localhost:3000` with hot reloading.
 
 ## Content Types That Work Well
 
@@ -249,7 +283,7 @@ When helping the author brainstorm or choose a direction, these formats tend to 
 
 ## Example
 
-A complete minimal blog post:
+A complete blog post:
 
 ```markdown
 ---
@@ -267,7 +301,7 @@ If your team has internal tools that aren't covered by existing extensions, buil
 
 ## Why Build a Custom MCP Server?
 
-goose connects to tools through the Model Context Protocol (MCP). While there are hundreds of community extensions available, sometimes your team has unique internal tools that need a custom integration.
+Goose connects to tools through the Model Context Protocol (MCP). While there are hundreds of community extensions available, sometimes your team has unique internal tools that need a custom integration.
 
 ## Getting Started
 
@@ -285,4 +319,17 @@ The core of any MCP server is its tool definitions...
 ## Wrapping Up
 
 Building an MCP server took about an hour and saved our team countless context switches. If you want to learn more, check out the [MCP documentation](https://modelcontextprotocol.io/introduction) and the [goose extensions directory](https://block.github.io/goose/extensions).
+
+<head>
+  <meta property="og:title" content="Building a Custom MCP Server for Your Team" />
+  <meta property="og:type" content="article" />
+  <meta property="og:url" content="https://block.github.io/goose/blog/2025/07/01/custom-mcp-server" />
+  <meta property="og:description" content="A step-by-step guide to creating a Model Context Protocol server that connects goose to your team's internal tools." />
+  <meta property="og:image" content="https://block.github.io/goose/assets/images/banner-a1b2c3d4e5f6.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta property="twitter:domain" content="block.github.io" />
+  <meta name="twitter:title" content="Building a Custom MCP Server for Your Team" />
+  <meta name="twitter:description" content="A step-by-step guide to creating a Model Context Protocol server that connects goose to your team's internal tools." />
+  <meta name="twitter:image" content="https://block.github.io/goose/assets/images/banner-a1b2c3d4e5f6.png" />
+</head>
 ```
