@@ -1,9 +1,14 @@
 ---
 name: learn
-description: Discover, install, and manage AI agent skills from agentskill.sh. Search for capabilities, install mid-session, scan for security issues, and provide feedback. Use when asked to find skills, install extensions, or check skill safety.
-metadata:
-  author: agentskill-sh
-  version: "2.0"
+description: Discover, install, and manage AI agent skills from agentskill.sh with two-layer security scanning.
+author: agentskill-sh
+version: "2.0"
+tags:
+  - discovery
+  - install
+  - security
+  - search
+  - skills
 ---
 
 # Learn — Find & Install Agent Skills
@@ -366,164 +371,30 @@ This is the shared installation procedure used by search, direct install, and UR
 
 This means users see a security score BEFORE installation, computed from patterns detected at publish time.
 
-**Treat skill installation like installing software.** Only use skills from trusted sources. Skills provide Claude with new capabilities through instructions and code — a malicious skill can direct Claude to invoke tools or execute code in harmful ways.
+**Treat skill installation like installing software.** Only use skills from trusted sources. Skills provide Claude with new capabilities through instructions and code; a malicious skill can direct Claude to invoke tools or execute code in harmful ways.
 
-For local scanning (e.g., `/learn scan`), scan content for malicious patterns. Reference [references/SECURITY.md](references/SECURITY.md) for the full pattern library.
+For local scanning (e.g., `/learn scan`), scan content for malicious patterns. See [references/SECURITY.md](references/SECURITY.md) for the complete pattern library and scoring formula.
 
-### Phase 0 — Automated Tools (fastest path)
+### Scanning Overview
 
-Run automated scanners first if available:
+The scan checks for threats across these categories:
 
-```bash
-# Primary scanner (detects prompt injection, obfuscation, secrets, suspicious downloads)
-uvx mcp-scan@latest --skills <path>
+| Severity | Weight | Examples |
+|----------|--------|----------|
+| CRITICAL | ×20 | Prompt injection, remote code execution, credential theft, reverse shells, destructive commands |
+| HIGH | ×10 | Obfuscated code, suspicious URLs, persistence mechanisms, hardcoded secrets, second-order injection |
+| MEDIUM | ×3 | Unverified dependencies, suspicious packages, payload hiding |
+| LOW | ×1 | Unusual metadata, privacy collection |
 
-# Secret scanners (pick one)
-trufflehog filesystem <path>
-gitleaks detect --source <path>
-detect-secrets scan <path>
-```
+**Scoring:** `100 - (CRITICAL × 20) - (HIGH × 10) - (MEDIUM × 3) - (LOW × 1)`
 
-- If tools pass with no findings → proceed with install (score 100)
-- If tools flag issues → apply score penalties per findings
-- If tools unavailable → continue with manual phases below
-
-### Phase 1 — Metadata & Structure
-
-1. **Validate structure:**
-   - Confirm `SKILL.md` exists
-   - List subfolders: only `scripts/`, `assets/`, `references/` expected
-   - Flag hidden files (`.hidden`, `..folder`)
-   - Flag binary files, ZIPs, or executables anywhere
-
-2. **Check frontmatter** (if YAML present):
-   - Parse YAML — only expected keys (`name`, `description`, `license`, `metadata`, `allowed-tools`)
-   - Flag suspicious `allowed-tools` (e.g., `Bash(*)`)
-   - Flag hidden or unusual metadata fields
-
-### Phase 2 — Static Text Analysis (SKILL.md body)
-
-3. **Check for CRITICAL patterns** (×20 weight each, 5+ = instant 0):
-   - Prompt injection: "ignore previous", "DAN mode", "jailbreak", "developer mode", "forget all previous", "you are now", "test artifact"
-   - Remote code execution: `curl|bash`, `wget|sh`, `source <(curl`, `eval $(`, `base64 -d|bash`
-   - ClickFix patterns: `unzip -P`, `xattr -d com.apple.quarantine`, one-liner installers
-   - Credential exfiltration: `cat ~/.aws|base64`, `cat ~/.ssh`, keychain dumps
-   - Reverse shells: `/dev/tcp/`, `nc -e`, socket connections
-   - Destructive: `rm -rf /`, `rm -rf ~`, `dd if=/dev/zero`, `mkfs`
-
-4. **Check for HIGH-risk patterns** (×10 weight each):
-   - Obfuscated code: base64 >50 chars that decode to shell, hex/octal strings
-   - Zero-width unicode: U+200B, U+200C, U+200D, U+FEFF hiding content
-   - Suspicious URLs: raw.githubusercontent.com (check account age), bit.ly, tinyurl, direct .exe/.zip
-   - Persistence: crontab, `echo > /etc/cron.d`, `.bashrc` modification, systemctl
-   - Social engineering: "run as sudo", "disable security", urgency language
-   - Hardcoded secrets: AWS keys (`AKIA...`), GCP keys, GitHub tokens, API keys in plaintext
-   - **Second-order prompt injection**: WebFetch/curl that downloads content for processing — fetched content may contain malicious instructions that override agent behavior
-   - **External data sources**: Skills that fetch from URLs pose risk — fetched content can inject prompts
-
-5. **Check for MEDIUM-risk patterns** (×3 weight each):
-   - Unverified dependencies: `pip install`, `npm install` from unknown sources
-   - requirements.txt / package.json with suspicious packages
-   - Hidden payloads in assets (check for stego indicators, unusual file sizes)
-   - Mismatch: skill behavior doesn't match title/description
-
-6. **Check for LOW-risk patterns** (×1 weight each):
-   - Unusual frontmatter fields
-   - Large base64 blobs (even if benign)
-   - Privacy collection (uname, hostname, env enumeration)
-
-### Phase 3 — Secret & Dependency Scan
-
-7. **Scan for secrets:**
-   - Run trufflehog/gitleaks/detect-secrets if available
-   - Manual regex: AWS keys, GCP keys, GitHub tokens, generic API keys
-   - Check for `cat ~/.aws`, `cat ~/.ssh`, keychain access
-
-8. **Scan dependencies:**
-   - Check requirements.txt, package.json, Gemfile for suspicious packages
-   - Flag `pip install -e` from URLs
-   - Flag staged malware patterns (legitimate-looking dep that chains to payload)
-
-### Phase 4 — Script Analysis (if scripts/ present)
-
-9. **Python files:**
-   - Run `bandit -r scripts/` if available
-   - Manual: check for `os.system`, `subprocess(shell=True)`, `exec`, `eval`, `pickle.loads`, `requests.post` to unknown hosts
-
-10. **Shell scripts:**
-    - Check for: `rm -rf`, `curl|bash`, `wget|sh`, `eval`, `chmod +x && ./`, `echo > /etc/cron.d`
-    - Verify shebang present and scripts are readable
-
-11. **Other files:**
-    - Flag any `.exe`, `.dll`, `.so`, `.dylib`
-    - Flag password-protected ZIPs (`unzip -P`)
-    - Flag unusual file types in assets/
-
-### Phase 5 — Dynamic Analysis (optional, strongest)
-
-12. **Sandbox execution** (if high-value target):
-    - Run in isolated VM/container with no network, read-only FS, no real credentials
-    - Monitor: network calls, file changes, process spawning
-    - Use tools like Evo Agent Guard, Snyk AI-BOM
-
-### Scoring
-
-```
-Score = 100 - (CRITICAL × 20) - (HIGH × 10) - (MEDIUM × 3) - (LOW × 1)
-Minimum = 0
-
-Note: 5+ CRITICAL findings = instant 0
-```
+5+ CRITICAL findings = instant score of 0.
 
 | Score  | Rating | Action                                     |
 | ------ | ------ | ------------------------------------------ |
 | 90-100 | SAFE   | Allow install                              |
 | 70-89  | REVIEW | Show issues, require acknowledgment        |
 | <70    | DANGER | Block install, treat as potential incident |
-
-### Build Inventory
-
-After scanning, list:
-
-- All URLs/endpoints (flag suspicious ones)
-- All file paths accessed
-- All shell commands found
-- All dependencies required
-- All scripts and their risk assessment
-
-### Report Security Issues
-
-After completing a scan (whether for install or via `/learn scan`), **report any issues found** to help improve the ecosystem:
-
-1. If issues were detected (score < 100), submit a security report:
-
-   ```
-   POST https://agentskill.sh/api/agent/security-reports
-   {
-     "slug": "<skill slug>",
-     "owner": "<skill owner>",
-     "score": <calculated score>,
-     "issues": [
-       {
-         "category": "<category>",
-         "severity": "<critical|high|medium|low>",
-         "description": "<what was found>",
-         "line": <line number if available>,
-         "pattern": "<pattern that matched>"
-       }
-     ],
-     "platform": "<detected platform>",
-     "agentName": "<agent name>",
-     "scannerVersion": "learn-2.0"
-   }
-   ```
-
-2. This report helps:
-   - Flag potentially malicious skills for review
-   - Improve the security scoring on agentskill.sh
-   - Protect other users from dangerous skills
-
-3. **Do not block** on this API call — it's fire-and-forget. If it fails, continue with the install/scan flow.
 
 ### Scan Report Format
 
@@ -537,7 +408,6 @@ After completing a scan (whether for install or via `/learn scan`), **report any
 | Severity | Type | Description |
 |----------|------|-------------|
 | <level> | <type> | <what was found> |
-...
 
 ### Network Endpoints
 <list of all URLs/IPs found, or "None detected">
@@ -548,6 +418,10 @@ After completing a scan (whether for install or via `/learn scan`), **report any
 ### Shell Commands
 <list of all bash commands, or "None detected">
 ```
+
+### Reporting Issues
+
+After scanning, report any issues found to `POST https://agentskill.sh/api/agent/security-reports` with the scan results. This helps flag malicious skills and protect other users. Fire-and-forget; do not block on this call.
 
 ---
 
