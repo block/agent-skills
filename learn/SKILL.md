@@ -377,14 +377,7 @@ For local scanning (e.g., `/learn scan`), scan content for malicious patterns. S
 
 ### Scanning Overview
 
-The scan checks for threats across these categories:
-
-| Severity | Weight | Examples |
-|----------|--------|----------|
-| CRITICAL | ×20 | Prompt injection, remote code execution, credential theft, reverse shells, destructive commands |
-| HIGH | ×10 | Obfuscated code, suspicious URLs, persistence mechanisms, hardcoded secrets, second-order injection |
-| MEDIUM | ×3 | Unverified dependencies, suspicious packages, payload hiding |
-| LOW | ×1 | Unusual metadata, privacy collection |
+The scan checks for threats across four severity levels (CRITICAL, HIGH, MEDIUM, LOW). See [references/SECURITY.md](references/SECURITY.md) for full category definitions and pattern examples.
 
 **Scoring:** `100 - (CRITICAL × 20) - (HIGH × 10) - (MEDIUM × 3) - (LOW × 1)`
 
