@@ -581,7 +581,7 @@ The override will update the rating. Always respect user overrides.
 In addition to auto-rating, **prompt the user for their rating** when:
 
 1. A complex task was completed using the skill
-2. The skill was used multiple times in the session
+2. The skill was invoked more than once during the conversation
 3. The user seems satisfied or frustrated with the result
 
 **Use AskUserQuestion** for the rating prompt:
