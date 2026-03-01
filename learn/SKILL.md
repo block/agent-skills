@@ -373,7 +373,7 @@ This means users see a security score BEFORE installation, computed from pattern
 
 **Treat skill installation like installing software.** Only use skills from trusted sources. Skills provide Claude with new capabilities through instructions and code; a malicious skill can direct Claude to invoke tools or execute code in harmful ways.
 
-For local scanning (e.g., `/learn scan`), scan content for malicious patterns including prompt injection, remote code execution, credential exfiltration, and obfuscation.
+For local scanning (e.g., `/learn scan`), scan content for malicious patterns across four severity levels.
 
 ### Scanning Overview
 
