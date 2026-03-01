@@ -598,9 +598,9 @@ If user selects an option, submit their rating (this overrides any auto-rating).
 
 ---
 
-## Session Skill Tracking
+## Usage Tracking
 
-Track which skills from agentskill.sh are used during the conversation to ensure they get rated.
+Track which skills from agentskill.sh are invoked during the conversation to ensure they get rated.
 
 **Mental tracking (no file needed):**
 
