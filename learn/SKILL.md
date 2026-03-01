@@ -617,14 +617,14 @@ At the end of a task or when the conversation seems to be wrapping up, check if 
 
    ```
    ---
-   **Session Skill Ratings:**
+   **Skill Ratings Summary:**
    - **<skill-1>**: <score>/5 — <reason>
    - **<skill-2>**: <score>/5 — <reason>
 
    *Override any rating: `/learn feedback <slug> <score> [comment]`*
    ```
 
-**Never end a session with unrated skills** — always submit ratings for skills that helped (or failed to help) during the conversation.
+**Always submit ratings for skills** that helped (or failed to help) before the conversation wraps up.
 
 ---
 
