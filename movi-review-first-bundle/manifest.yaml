@@ -1,0 +1,48 @@
+version: 1
+id: movi-agent-bundle
+display_name: Movi Review-First Bundle
+status: listed_live
+canonical_repo: xiaojiou176-open/movi-organizer
+entrypoint: SKILL.md
+package_shape: skill-folder
+registry_targets:
+  clawhub:
+    status: listed_live
+    package_shape: skill-folder
+    channel_role: host-native skill registry
+    moderation_verdict: suspicious
+    detected_label: suspicious.vt_suspicious
+    read_back: current ClawHub page is listed live, but still carries the suspicious moderation warning
+  openhands-extensions:
+    status: review_pending
+    package_shape: skill-folder
+    channel_role: host-native extensions registry
+    submission_thread: OpenHands/extensions#161
+    read_back: current GitHub thread is OPEN / REVIEW_REQUIRED / BLOCKED
+  official-mcp-registry:
+    status: not_submitted
+    channel_role: official MCP registry
+  ghcr:
+    status: not_published
+    channel_role: container/package registry
+bundle_surfaces:
+  - SKILL.md
+  - README.md
+  - references/README.md
+  - references/INSTALL.md
+  - references/CAPABILITIES.md
+  - references/DEMO.md
+  - references/TROUBLESHOOTING.md
+  - references/OPENHANDS_MCP_CONFIG.json
+  - references/OPENCLAW_MCP_CONFIG.json
+  - codex.mcp.json
+  - claude-code.mcp.json
+  - openclaw.mcp.json
+  - install-and-proof.md
+claims_not_made:
+  - no accepted OpenHands listing is claimed beyond the current review thread
+  - no live OpenClaw listing is claimed
+  - no clean ClawHub approval is claimed beyond the current suspicious moderation warning
+  - no official MCP Registry submission is claimed
+  - no browser-extension marketplace listing is claimed
+  - no hosted Movi SaaS claim is made
