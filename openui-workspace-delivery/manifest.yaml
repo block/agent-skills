@@ -1,0 +1,46 @@
+schema_version: 1
+artifact: public-skill-listing-manifest
+
+skill:
+  name: openui-workspace-delivery
+  display_name: OpenUI Workspace Delivery
+  version: 1.0.0
+  entrypoint: SKILL.md
+  package_shape: skill-folder
+
+registry_targets:
+  clawhub:
+    status: listed_live
+    package_shape: skill-folder
+    channel_role: host-native skill registry
+    moderation_verdict: suspicious
+    moderation_label: suspicious.llm_suspicious
+    read_back: current ClawHub page is listed live, but still carries the suspicious moderation warning
+  openhands-extensions:
+    status: review_pending
+    package_shape: skill-folder
+    channel_role: host-native extensions registry
+    submission_thread: OpenHands/extensions#161
+    read_back: current GitHub thread is OPEN / REVIEW_REQUIRED / BLOCKED
+
+boundaries:
+  product_identity: Local MCP-first UI generation and review workspace for OpenUI MCP Studio.
+  canonical_packet_role: Canonical pure-skills packet for the repo; repo root remains the canonical public root.
+  canonical_repo_version: 0.1.0
+  official_listing_state: ClawHub is listed live with a suspicious moderation warning; OpenHands/extensions#161 remains review pending; no official registry listing is claimed
+  not_claimed:
+    - No accepted OpenHands/extensions listing exists yet
+    - No trust-cleared ClawHub result exists yet
+    - No live official marketplace listing exists yet
+    - No hosted runtime or managed API publication is claimed
+
+pair_with:
+  - SKILL.md
+  - README.md
+  - references/README.md
+  - references/INSTALL.md
+  - references/CAPABILITIES.md
+  - references/DEMO.md
+  - references/OPENHANDS_MCP_CONFIG.json
+  - references/OPENCLAW_MCP_CONFIG.json
+  - references/TROUBLESHOOTING.md
