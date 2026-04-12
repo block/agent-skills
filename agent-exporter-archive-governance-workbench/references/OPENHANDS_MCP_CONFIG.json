@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "agent-exporter": {
+      "command": "python3",
+      "args": [
+        "/absolute/path/to/agent-exporter/scripts/agent_exporter_mcp.py"
+      ]
+    }
+  }
+}
+

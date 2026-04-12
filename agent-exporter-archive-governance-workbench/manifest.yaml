@@ -1,0 +1,41 @@
+schema_version: 1
+artifact: public-skill-listing-manifest
+
+skill:
+  name: agent-exporter-archive-governance-workbench
+  display_name: agent-exporter Archive Governance Workbench
+  version: 1.0.0
+  entrypoint: SKILL.md
+  package_shape: skill-folder
+
+registry_targets:
+  clawhub:
+    status: listed-live
+    package_shape: skill-folder
+    submit_via: clawhub publish . --slug agent-exporter-archive-governance-workbench --name "agent-exporter Archive Governance Workbench" --version 1.0.0 --tags ai-agents,archive,governance,mcp,local-first
+    read_back: clawhub inspect agent-exporter-archive-governance-workbench --no-input
+  openhands-extensions:
+    status: review-pending
+    package_shape: skill-folder
+    submit_via: submit this folder as skills/agent-exporter-archive-governance-workbench/ in OpenHands/extensions
+    submission_ref: https://github.com/OpenHands/extensions/pull/162
+
+boundaries:
+  product_identity: Local-first archive and governance workbench packet for agent-exporter.
+  canonical_repo_version: 0.1.1
+  listing_state_summary: ClawHub listed-live; OpenHands/extensions review-pending.
+  not_claimed:
+    - No listed-live OpenHands/extensions entry exists yet
+    - No hosted archive platform exists yet
+    - No full-CLI MCP parity exists yet
+
+pair_with:
+  - SKILL.md
+  - README.md
+  - references/README.md
+  - references/INSTALL.md
+  - references/OPENHANDS_MCP_CONFIG.json
+  - references/OPENCLAW_MCP_CONFIG.json
+  - references/CAPABILITIES.md
+  - references/DEMO.md
+  - references/TROUBLESHOOTING.md
