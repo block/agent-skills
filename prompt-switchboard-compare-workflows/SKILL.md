@@ -1,7 +1,14 @@
 ---
 name: prompt-switchboard-compare-workflows
 description: Teach an agent to install Prompt Switchboard's local MCP sidecar, connect it in a host, and run a compare-first browser workflow.
+author: xiaojiou176
 version: 1.1.1
+tags:
+  - browser
+  - compare
+  - mcp
+  - local-first
+  - workflow
 triggers:
   - prompt switchboard
   - prompt-switchboard

@@ -1,6 +1,14 @@
 ---
 name: dealwatch-readonly-builder
 description: Teach the agent how to connect the published DealWatch MCP package, choose the right read-only tool, and guide the user through the compare-first safe path without claiming hosted or write-capable features.
+author: xiaojiou176
+version: "1.1.0"
+tags:
+  - shopping
+  - grocery
+  - mcp
+  - local-first
+  - read-only
 triggers:
   - dealwatch
   - dealwatch setup

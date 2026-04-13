@@ -1,6 +1,14 @@
 ---
 name: notestorelab-case-review
 description: This skill should be used when the user asks to "review an Apple Notes case root", "set up NoteStore Lab MCP", "run notes-recovery-mcp", "ask one bounded question about a case", or "compare two NoteStore Lab case roots". It teaches install, first-success proof, and bounded case review without turning the repo into a hosted platform.
+author: xiaojiou176
+version: "1.0.2"
+tags:
+  - apple-notes
+  - forensics
+  - recovery
+  - mcp
+  - local-first
 triggers:
   - apple notes recovery
   - notes-recovery-mcp
