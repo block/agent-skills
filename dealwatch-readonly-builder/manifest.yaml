@@ -1,0 +1,42 @@
+schema_version: 1
+name: dealwatch-readonly-builder
+display_name: DealWatch Read-only Builder
+version: 1.0.0
+version: 1.1.0
+summary: >
+  Public skill bundle for DealWatch that packages MCP install guidance, a
+  read-only tool map, and a safe-first compare workflow for OpenHands/OpenClaw
+  style hosts.
+homepage: https://github.com/xiaojiou176-open/dealwatch
+repository: https://github.com/xiaojiou176-open/dealwatch
+license: MIT
+authors:
+  - name: DealWatch
+entrypoints:
+  skill_markdown: SKILL.md
+compatibility:
+  openhands:
+    mode: skill directory plus published MCP config
+    published_listing: false
+  clawhub:
+    mode: skill publish plus published MCP config
+    published_listing: true
+capabilities:
+  - install the published DealWatch MCP package in host-specific config
+  - expose the stable read-only DealWatch tool inventory
+  - route builders into the safe-first runtime and compare path
+  - preserve honest local-first boundary wording
+boundaries:
+  hosted_operator: false
+  write_capable_mcp: false
+  oauth_login: false
+  official_listing_live: true
+distribution_notes:
+  current_claim: ClawHub listing is live; other hosts should only claim submission or live state when independently confirmed.
+verification:
+  repo_commands:
+    - python3 scripts/verify_public_surface.py
+    - python3 scripts/verify_docs_contract.py
+    - python3 scripts/verify_browser_extension_surface.py
+    - GITHUB_TOKEN="$(gh auth token)" python3 scripts/verify_remote_github_state.py
+    - uvx --from dealwatch==1.0.1 dealwatch-mcp list-tools --json
