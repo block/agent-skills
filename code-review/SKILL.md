@@ -2,7 +2,7 @@
 name: code-review
 description: Comprehensive code review checklist for pull requests
 author: goose
-version: "1.0"
+version: "1.0.1"
 tags:
   - development
   - quality
