@@ -1,6 +1,6 @@
 ---
 name: low-frequency-thread-monitor
-description: Low-context ETA-aware monitoring protocol for non-Goal Codex controller windows supervising background worker threads, especially when a controller reads or checks another Codex conversation thread/window
+description: ETA-aware monitoring protocol for non-Goal Codex controllers reading or checking worker threads
 author: ggsq003-png
 version: "1.0"
 tags:
@@ -25,7 +25,7 @@ Use it for ordinary non-Goal controller windows that still need to keep backgrou
 
 When a controller reads, checks, or inspects another Codex conversation thread/window, treat that action as a monitoring cycle and apply this skill even if the Owner did not repeat the skill name.
 
-Trigger hints include: "已读取对话线程", "读取对话线程", `read_thread`, `list_threads`, "read/check worker thread", or "check background window".
+Trigger hints include `read_thread`, `list_threads`, "read worker thread", "check worker thread", or "check background window".
 
 ## State Model
 
