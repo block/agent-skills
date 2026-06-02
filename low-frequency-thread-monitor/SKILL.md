@@ -40,7 +40,7 @@ Pending next check means the monitor is still active, even if no foreground text
 5. Use `turnLimit: 2 or 3` and `includeOutputs: false` by default while monitoring.
 6. Use `includeOutputs: true` only for failure diagnosis, a small cited final output, or an explicit Owner request.
 7. In one foreground monitoring cycle, read a target thread at most once unless a terminal state, failure, blocker, or Owner-input request is already visible.
-8. After a non-terminal read, set the next check time and stop reading that target thread until the scheduled time arrives. Re-reading after only 10-30 seconds is not allowed.
+8. After a non-terminal read, set the next check time and stop reading that target thread until the scheduled time arrives. Do not re-read the same running thread after only a few seconds.
 9. Stop polling only when a final report, failure, blocker, handoff, or Owner-input request is visible.
 10. After completion, read the final report seriously, then check named artifacts and governing fact files only as needed before recommending the next allowed action.
 
@@ -50,12 +50,9 @@ If you dispatch the worker yourself, ask it for one final completion/failure rep
 
 A monitoring read is a single check, not a loop.
 
-After reading a target thread and finding it still running:
+After reading a target thread and finding it still running, record the observed state, choose the next check time from the Timing Table or Adaptive Rule, and do not read that same target again before the scheduled time.
 
-1. Record the observed state.
-2. Choose `next_check_at` from the Timing Table or Adaptive Rule.
-3. Do not call `read_thread`, `list_threads`, or another thread-reading action for that same target before `next_check_at`.
-4. If no timer or wakeup is available, report the exact suggested next check time and stop the current monitoring cycle.
+If no timer or wakeup is available, report the exact suggested next check time and stop the current monitoring cycle.
 
 Exceptions are narrow: Owner asks for status, a terminal/failure/blocker/Owner-input state is already visible, or a hard boundary risk requires immediate inspection.
 
