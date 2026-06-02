@@ -36,10 +36,11 @@ Pending next check means the monitor is still active, even if no foreground text
 1. If the target thread is still running and a next check is scheduled, the monitor is still active. Do not send a final answer that closes, archives, marks complete, abandons, or replaces the monitoring window.
 2. Use a wakeup, automation, timer, or thread-continuation mechanism for the next check when available. If unavailable, say that limitation and the exact next check time, but do not claim monitoring is complete.
 3. Do not nudge or steer a running thread with messages like "continue", "hurry", "are you done", or "report progress".
-4. Read only recent status while monitoring. Use `turnLimit: 2 or 3` and `includeOutputs: false` by default.
-5. Use `includeOutputs: true` only for failure diagnosis, a small cited final output, or an explicit Owner request.
-6. Stop polling only when a final report, failure, blocker, handoff, or Owner-input request is visible.
-7. After completion, read the final report seriously, then check named artifacts and governing fact files only as needed before recommending the next allowed action.
+4. During monitoring, never read the full target thread, full transcript, or full tool outputs just to check progress. Read only the smallest recent status needed to decide whether the worker is still running, completed, failed, blocked, or asking Owner.
+5. Use `turnLimit: 2 or 3` and `includeOutputs: false` by default while monitoring.
+6. Use `includeOutputs: true` only for failure diagnosis, a small cited final output, or an explicit Owner request.
+7. Stop polling only when a final report, failure, blocker, handoff, or Owner-input request is visible.
+8. After completion, read the final report seriously, then check named artifacts and governing fact files only as needed before recommending the next allowed action.
 
 If you dispatch the worker yourself, ask it for one final completion/failure report. Do not ask it to send routine progress updates unless the task boundary requires them.
 
@@ -100,7 +101,7 @@ If only 1-2 minutes likely remain, check in 1-2 minutes. Do not round up to a ge
 
 Normally avoid intervals under 60 seconds. Do not poll every few seconds merely to see whether the thread is active.
 
-Near-finish override: when the latest status implies final packaging, final answer writing, or short self-check, the next check is 1-3 minutes. Scheduling 8-10 minutes in this state is a monitoring error.
+Near-finish rule: when the latest status implies final packaging, final answer writing, or short self-check, the next check is 1-3 minutes. Avoid scheduling 8-10 minutes in this state.
 
 ## Adaptive Rule
 
