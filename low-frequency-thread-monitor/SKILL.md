@@ -39,10 +39,27 @@ Pending next check means the monitor is still active, even if no foreground text
 4. During monitoring, never read the full target thread, full transcript, or full tool outputs just to check progress. Read only the smallest recent status needed to decide whether the worker is still running, completed, failed, blocked, or asking Owner.
 5. Use `turnLimit: 2 or 3` and `includeOutputs: false` by default while monitoring.
 6. Use `includeOutputs: true` only for failure diagnosis, a small cited final output, or an explicit Owner request.
-7. Stop polling only when a final report, failure, blocker, handoff, or Owner-input request is visible.
-8. After completion, read the final report seriously, then check named artifacts and governing fact files only as needed before recommending the next allowed action.
+7. In one foreground monitoring cycle, read a target thread at most once unless a terminal state, failure, blocker, or Owner-input request is already visible.
+8. After a non-terminal read, set the next check time and stop reading that target thread until the scheduled time arrives. Re-reading after only 10-30 seconds is not allowed.
+9. Stop polling only when a final report, failure, blocker, handoff, or Owner-input request is visible.
+10. After completion, read the final report seriously, then check named artifacts and governing fact files only as needed before recommending the next allowed action.
 
 If you dispatch the worker yourself, ask it for one final completion/failure report. Do not ask it to send routine progress updates unless the task boundary requires them.
+
+## Cooldown Rule
+
+A monitoring read is a single check, not a loop.
+
+After reading a target thread and finding it still running:
+
+1. Record the observed state.
+2. Choose `next_check_at` from the Timing Table or Adaptive Rule.
+3. Do not call `read_thread`, `list_threads`, or another thread-reading action for that same target before `next_check_at`.
+4. If no timer or wakeup is available, report the exact suggested next check time and stop the current monitoring cycle.
+
+Exceptions are narrow: Owner asks for status, a terminal/failure/blocker/Owner-input state is already visible, or a hard boundary risk requires immediate inspection.
+
+If uncertain, choose the smallest legal interval from the table. Do not replace uncertainty with repeated immediate reads.
 
 ## Non-Interruption
 
@@ -99,7 +116,7 @@ If only 1-2 minutes likely remain, check in 1-2 minutes. Do not round up to a ge
 | Idle with no final report | 2-4 minutes once, then light diagnostic read |
 | Owner asks for status | Read once immediately, then reschedule from this table |
 
-Normally avoid intervals under 60 seconds. Do not poll every few seconds merely to see whether the thread is active.
+Normally avoid intervals under 60 seconds. Do not poll every few seconds merely to see whether the thread is active. For a still-running target, any repeat read under 60 seconds is invalid unless an exception from the Cooldown Rule applies.
 
 Near-finish rule: when the latest status implies final packaging, final answer writing, or short self-check, the next check is 1-3 minutes. Avoid scheduling 8-10 minutes in this state.
 
