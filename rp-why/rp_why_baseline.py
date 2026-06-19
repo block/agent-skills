@@ -132,7 +132,7 @@ class RPWhyAnalyzer:
         if self.conn:
             self.conn.close()
 
-    # ─── Classification ───────────────────────────────────────────────────
+    # --- Classification ---------------------------------------------------
 
     def classify_dok(self, text: str) -> Tuple[int, float, List[str]]:
         if not text:
@@ -234,7 +234,7 @@ class RPWhyAnalyzer:
             else:
                 return "Expected"
 
-    # ─── Data Access ──────────────────────────────────────────────────────
+    # --- Data Access ------------------------------------------------------
 
     def get_data_summary(self) -> Dict:
         cursor = self.conn.cursor()
@@ -373,7 +373,7 @@ class RPWhyAnalyzer:
             'tokens': row['total_tokens'] or 0
         } for row in cursor.fetchall()}
 
-    # ─── Analysis ─────────────────────────────────────────────────────────
+    # --- Analysis ---------------------------------------------------------
 
     def analyze_prompts(self, prompts: List[Dict]) -> Dict:
         """Full analysis of a set of prompts"""
@@ -531,7 +531,7 @@ class RPWhyAnalyzer:
         else:
             return "stable"
 
-    # ─── Baseline Generation ──────────────────────────────────────────────
+    # --- Baseline Generation ----------------------------------------------
 
     def generate_baseline(self) -> Dict:
         if not self.connect():
@@ -639,7 +639,7 @@ class RPWhyAnalyzer:
         else:
             return 6
 
-    # ─── Baseline I/O ─────────────────────────────────────────────────────
+    # --- Baseline I/O -----------------------------------------------------
 
     def save_baseline(self, baseline: Dict) -> bool:
         try:
@@ -724,7 +724,7 @@ class RPWhyAnalyzer:
 
         return migrated
 
-    # ─── Report Formatting ────────────────────────────────────────────────
+    # --- Report Formatting ------------------------------------------------
 
     def format_bar(self, percentage: float, width: int = 20) -> str:
         filled = int(percentage / 100 * width)

@@ -1,6 +1,6 @@
 # rp-why: Three Dimensions of AI Collaboration
 
-> **🪿 Goose Skill** - Measures DOK (cognitive complexity), TM (tool maturity), and ADT (agentic delegation trust) to reveal growth in human-AI collaboration practice.
+> **> Goose Skill** - Measures DOK (cognitive complexity), TM (tool maturity), and ADT (agentic delegation trust) to reveal growth in human-AI collaboration practice.
 
 A self-reflection framework that tracks three dimensions of your AI collaboration over time. See where you are, where you've been, and where the practice is heading.
 
@@ -134,10 +134,10 @@ productive edge.
 
 DOK DISTRIBUTION
 ------------------------------------------------------------------
-DOK 1 (Recall      ):  █░░░░░░░░░░░░░░░░░░░   6.5%
-DOK 2 (Application ):  ██████████░░░░░░░░░░  48.4%
-DOK 3 (Strategic   ):  ███████░░░░░░░░░░░░░  35.5%
-DOK 4 (Extended    ):  ██░░░░░░░░░░░░░░░░░░   9.7%
+DOK 1 (Recall      ):  #-------------------   6.5%
+DOK 2 (Application ):  ##########----------  48.4%
+DOK 3 (Strategic   ):  #######-------------  35.5%
+DOK 4 (Extended    ):  ##------------------   9.7%
 
 DOK 3+4:  45.2%     Compression:  12.9%
 

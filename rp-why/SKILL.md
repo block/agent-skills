@@ -117,19 +117,19 @@ Measures the gap between Tool Complexity and Human Cognitive Depth. The TM x DOK
 ```
               DOK 1         DOK 2          DOK 3           DOK 4
             (Recall)    (Application)  (Strategic)     (Extended)
-           +───────────+──────────────+─────────────+─────────────+
-Tier 5-6   │ Overpowered│ Underutil-  │  Frontier   │  Frontier   │
-(Symphony/ │            │   izing     │             │             │
- Virtuoso) │            │             │             │             │
-           +───────────+──────────────+─────────────+─────────────+
-Tier 3-4   │ Overpowered│  Expected   │   Growing   │  Frontier   │
-(Ensemble/ │            │             │             │             │
- Chamber)  │            │             │             │             │
-           +───────────+──────────────+─────────────+─────────────+
-Tier 1-2   │  Expected  │   Growing   │  Thinking   │  Thinking   │
-(Solo/     │            │             │   Ahead     │   Ahead     │
- Duet)     │            │             │             │             │
-           +───────────+──────────────+─────────────+─────────────+
+           +-----------+--------------+-------------+-------------+
+Tier 5-6   | Overpowered| Underutil-  |  Frontier   |  Frontier   |
+(Symphony/ |            |   izing     |             |             |
+ Virtuoso) |            |             |             |             |
+           +-----------+--------------+-------------+-------------+
+Tier 3-4   | Overpowered|  Expected   |   Growing   |  Frontier   |
+(Ensemble/ |            |             |             |             |
+ Chamber)  |            |             |             |             |
+           +-----------+--------------+-------------+-------------+
+Tier 1-2   |  Expected  |   Growing   |  Thinking   |  Thinking   |
+(Solo/     |            |             |   Ahead     |   Ahead     |
+ Duet)     |            |             |             |             |
+           +-----------+--------------+-------------+-------------+
 ```
 
 ---
@@ -143,28 +143,28 @@ Establishes the starting point. Analyzes all available session history.
 **Report structure:**
 
 ```
-╔══════════════════════════════════════════════════════════════════╗
-║                    rp-why · BASELINE                             ║
-╚══════════════════════════════════════════════════════════════════╝
++==================================================================+
+|                    rp-why . BASELINE                             |
++==================================================================+
 
 DATA SUMMARY
-────────────────────────────────────────────────────────────────────
+--------------------------------------------------------------------
 Period:           [start] - [end] ([N] days)
 Sessions:         [N]
 Prompts:          [N] classified
 
 THREE DIMENSIONS
-────────────────────────────────────────────────────────────────────
+--------------------------------------------------------------------
 DOK (Depth of Knowledge)     [score]
-TM  (Tool Maturity)          Tier [N] · [Name]
+TM  (Tool Maturity)          Tier [N] . [Name]
 ADT (Delegation Trust)       [Zone]
 
 DIAGNOSTIC ZONE: [Zone Name]
-────────────────────────────────────────────────────────────────────
+--------------------------------------------------------------------
 [Zone description from the six-zone model]
 
 DOK DISTRIBUTION
-────────────────────────────────────────────────────────────────────
+--------------------------------------------------------------------
 DOK 1 (Recall):       [bar]  [%]
 DOK 2 (Application):  [bar]  [%]
 DOK 3 (Strategic):    [bar]  [%]
@@ -174,12 +174,12 @@ DOK 3+4:  [%]
 Compression:  [%]
 
 GROWTH TARGETS
-────────────────────────────────────────────────────────────────────
+--------------------------------------------------------------------
 DOK 3+4 target:       [%]
 Compression target:   [%]
-Next TM tier:         Tier [N] · [Name] ([what it means])
+Next TM tier:         Tier [N] . [Name] ([what it means])
 
-────────────────────────────────────────────────────────────────────
+--------------------------------------------------------------------
 Baseline saved to: ~/.config/goose/rp-why-baseline.json
 Run /rp-why current after sessions to track progress.
 ```
@@ -191,28 +191,28 @@ Analyzes the active session. The quick-check mirror.
 **Report structure:**
 
 ```
-╔══════════════════════════════════════════════════════════════════╗
-║                    rp-why · CURRENT SESSION                      ║
-╚══════════════════════════════════════════════════════════════════╝
++==================================================================+
+|                    rp-why . CURRENT SESSION                      |
++==================================================================+
 
 SESSION SNAPSHOT
-────────────────────────────────────────────────────────────────────
+--------------------------------------------------------------------
 Date:             [date]
 Conversations:    [N]
 Prompts:          [N] classified
 
 THREE DIMENSIONS
-────────────────────────────────────────────────────────────────────
+--------------------------------------------------------------------
 DOK (Adjusted)       [score]
-TM  (Tool Maturity)  Tier [N] · [Name]
+TM  (Tool Maturity)  Tier [N] . [Name]
 ADT (Delegation)     [Zone]
 
 DIAGNOSTIC ZONE: [Zone Name]
-────────────────────────────────────────────────────────────────────
+--------------------------------------------------------------------
 [Zone description]
 
 DOK DISTRIBUTION
-────────────────────────────────────────────────────────────────────
+--------------------------------------------------------------------
 DOK 1 (Recall):       [bar]  [%]
 DOK 2 (Application):  [bar]  [%]
 DOK 3 (Strategic):    [bar]  [%]
@@ -221,14 +221,14 @@ DOK 4 (Extended):     [bar]  [%]
 DOK 3+4:  [%]     Compression:  [%]
 
 PEAK MOMENT
-────────────────────────────────────────────────────────────────────
-"[highest DOK prompt text, truncated]" — DOK [N] · [Level Name]
+--------------------------------------------------------------------
+"[highest DOK prompt text, truncated]"  - DOK [N] . [Level Name]
 
 GROWTH NUDGE
-────────────────────────────────────────────────────────────────────
+--------------------------------------------------------------------
 [Contextual nudge based on diagnostic zone, not generic]
 
-🪞 [Reflection question tailored to current zone]
+> [Reflection question tailored to current zone]
 ```
 
 ### `/rp-why compare`
@@ -238,23 +238,23 @@ Delta report. Shows movement from baseline to now.
 **Report structure:**
 
 ```
-╔══════════════════════════════════════════════════════════════════╗
-║                    rp-why · COMPARE                              ║
-╚══════════════════════════════════════════════════════════════════╝
++==================================================================+
+|                    rp-why . COMPARE                              |
++==================================================================+
 
 COMPARING: Today ([date]) vs. Baseline ([baseline period])
 
-THREE DIMENSIONS                    Baseline        Today        Δ
-────────────────────────────────────────────────────────────────────
+THREE DIMENSIONS                    Baseline        Today        Delta
+--------------------------------------------------------------------
 DOK (Adjusted)                      [score]         [score]    [+/-%]
 TM  (Tool Maturity)                 Tier [N]        Tier [N]   [+/-N]
 ADT (Delegation Trust)              [Zone]          [Zone]     [arrow]
 
-DIAGNOSTIC ZONE: [Baseline Zone] → [Current Zone]
-────────────────────────────────────────────────────────────────────
+DIAGNOSTIC ZONE: [Baseline Zone] -> [Current Zone]
+--------------------------------------------------------------------
 
-DOK DISTRIBUTION                    Baseline        Today        Δ
-────────────────────────────────────────────────────────────────────
+DOK DISTRIBUTION                    Baseline        Today        Delta
+--------------------------------------------------------------------
 DOK 1 (Recall)                      [%]             [%]       [+/-pp]
 DOK 2 (Application)                 [%]             [%]       [+/-pp]
 DOK 3 (Strategic)                   [%]             [%]       [+/-pp]
@@ -264,17 +264,17 @@ DOK 3+4                             [%]             [%]       [+/-pp]
 Compression                         [%]             [%]       [+/-pp or "emerged"]
 
 TRAJECTORY
-────────────────────────────────────────────────────────────────────
+--------------------------------------------------------------------
 Direction:  [arrow] [Improving/Stable/Declining]
 Signal:     [1-2 sentence interpretation of what the delta means]
 
 WHAT SHIFTED
-────────────────────────────────────────────────────────────────────
-• [Bullet interpretations of the most meaningful changes]
-• [Focus on what the numbers mean for the collaboration practice]
-• [Connect to diagnostic zone movement]
+--------------------------------------------------------------------
+* [Bullet interpretations of the most meaningful changes]
+* [Focus on what the numbers mean for the collaboration practice]
+* [Connect to diagnostic zone movement]
 
-────────────────────────────────────────────────────────────────────
+--------------------------------------------------------------------
 Run /rp-why overall for full longitudinal analysis.
 ```
 
@@ -285,54 +285,54 @@ Full longitudinal report. The complete growth picture.
 **Report structure:**
 
 ```
-╔══════════════════════════════════════════════════════════════════╗
-║                    rp-why · OVERALL                              ║
-╚══════════════════════════════════════════════════════════════════╝
++==================================================================+
+|                    rp-why . OVERALL                              |
++==================================================================+
 
 FULL DATASET: [start] - [end] ([N] days)
 Sessions: [N]  |  Prompts: [N]  |  Conversations: [N]
 
 CURRENT STANDINGS
-────────────────────────────────────────────────────────────────────
+--------------------------------------------------------------------
 DOK (Adjusted, full mean)    [score]
-TM  (Tool Maturity)          Tier [N] · [Name]
+TM  (Tool Maturity)          Tier [N] . [Name]
 ADT (Delegation Trust)       [Zone]
 
 DOK 3+4:  [%]     Compression:  [%]     Floor:  [score]
 
 ROLLING AVERAGE (Last 10 Sessions vs. First 10)
-────────────────────────────────────────────────────────────────────
-                             First 10        Last 10          Δ
+--------------------------------------------------------------------
+                             First 10        Last 10          Delta
 Adjusted DOK                 [score]         [score]        [+/-%]
 DOK 3+4 %                   [%]             [%]           [+/-pp]
 Compression %                [%]             [%]           [emerged/+/-pp]
 
 PHASE ANALYSIS
-────────────────────────────────────────────────────────────────────
+--------------------------------------------------------------------
 Phase         Dates              Sessions  DOK    DOK3+4  Comp   TM
-─────         ─────              ────────  ───    ──────  ────   ──
+-----         -----              --------  ---    ------  ----   --
 [Auto-detected phases based on DOK trajectory shifts]
 
 TRAJECTORY
-────────────────────────────────────────────────────────────────────
-Peak DOK:     [score] ([date] — [context])
+--------------------------------------------------------------------
+Peak DOK:     [score] ([date]  - [context])
 Floor:        [score] ([interpretation])
 Direction:    [arrow] [Narrative of the growth arc]
 
 DOK DISTRIBUTION (Full Dataset)
-────────────────────────────────────────────────────────────────────
+--------------------------------------------------------------------
 DOK 1 (Recall):       [bar]  [%]
 DOK 2 (Application):  [bar]  [%]
 DOK 3 (Strategic):    [bar]  [%]
 DOK 4 (Extended):     [bar]  [%]
 
 GROWTH STORY
-────────────────────────────────────────────────────────────────────
+--------------------------------------------------------------------
 [2-3 sentence narrative interpreting the full arc. Not prescriptive.
 Describes what the data reveals about how the collaboration practice
 has evolved.]
 
-────────────────────────────────────────────────────────────────────
+--------------------------------------------------------------------
 Data source: ~/.local/share/goose/sessions/sessions.db
 Methodology: DOK keyword classification, compression detection
 (short prompt + high response ratio + established context),
@@ -349,7 +349,7 @@ If an existing baseline file uses the v3 format (Gas Town stages, quadrant termi
 
 | v3 Field | v4 Equivalent |
 |----------|---------------|
-| `estimated_stage: 5` | `tm_tier: 3` (Ensemble) — Stage 5 maps to Tier 3 for new users |
+| `estimated_stage: 5` | `tm_tier: 3` (Ensemble)  - Stage 5 maps to Tier 3 for new users |
 | `quadrant: "Underutilizing"` | `adt_zone: "Underutilizing"` (zone name preserved) |
 | `quadrant: "Frontier"` | `adt_zone: "Frontier"` |
 | `quadrant: "Thinking Ahead"` | `adt_zone: "Thinking Ahead"` |
