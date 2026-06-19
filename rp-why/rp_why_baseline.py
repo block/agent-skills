@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
 """
-RP-WHY Baseline Analysis Tool
+RP-WHY Baseline Analysis Tool (v4 - Three Dimensions)
 
-Analyzes historical Goose sessions to establish a DOK/Gas Town baseline.
-Uses all available session data (not limited to any time period).
+Analyzes historical Goose sessions to establish a DOK/TM/ADT baseline.
+Uses all available session data.
 
 Usage:
     python rp_why_baseline.py init      # Generate baseline analysis
+    python rp_why_baseline.py baseline  # Same as init
+    python rp_why_baseline.py current   # Analyze current/recent session
     python rp_why_baseline.py compare   # Compare to baseline
+    python rp_why_baseline.py overall   # Full longitudinal report
     python rp_why_baseline.py export    # Export baseline as JSON
     python rp_why_baseline.py show      # Show current baseline
 """
@@ -16,147 +19,227 @@ import sqlite3
 import json
 import os
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional
 from collections import defaultdict
 
 
-class RPWhyBaseline:
-    """Analyze Goose sessions for DOK baseline assessment"""
-    
+class RPWhyAnalyzer:
+    """Analyze Goose sessions using the Three Dimensions model"""
+
     # Database and config paths (cross-platform)
     @staticmethod
     def _get_sessions_db() -> Path:
-        """Get sessions database path (cross-platform)"""
         import platform
         if platform.system() == "Windows":
             return Path(os.environ.get("LOCALAPPDATA", "")) / "goose" / "sessions" / "sessions.db"
         else:
             return Path.home() / ".local/share/goose/sessions/sessions.db"
-    
+
     @staticmethod
     def _get_baseline_file() -> Path:
-        """Get baseline file path (cross-platform)"""
         import platform
         if platform.system() == "Windows":
             return Path(os.environ.get("LOCALAPPDATA", "")) / "goose" / "rp-why-baseline.json"
         else:
             return Path.home() / ".config/goose/rp-why-baseline.json"
-    
+
     # DOK classification patterns
     DOK_PATTERNS = {
         1: [
             r'\bhow do i\b', r'\bwhat is\b', r'\bsyntax\b', r'\bcommand\b',
             r'\bwhere\b', r'\bshow me\b', r'\bexample\b', r'\bhelp with\b',
-            r'\bwhat\'s the\b', r'\bhow to\b', r'\bcan you show\b'
+            r'\bwhat\'s the\b', r'\bhow to\b', r'\bcan you show\b',
+            r'\blist\b', r'\bdefine\b', r'\blook up\b'
         ],
         2: [
             r'\bimplement\b', r'\bdebug\b', r'\bfix\b', r'\brefactor\b',
             r'\btest\b', r'\badd\b', r'\bupdate\b', r'\bcreate\b',
             r'\bbuild\b', r'\bwrite\b', r'\bmodify\b', r'\bchange\b',
-            r'\bremove\b', r'\bdelete\b', r'\binstall\b', r'\bsetup\b'
+            r'\bremove\b', r'\bdelete\b', r'\binstall\b', r'\bsetup\b',
+            r'\bconfigure\b', r'\bmigrate\b', r'\bconvert\b'
         ],
         3: [
             r'\bdesign\b', r'\barchitect\b', r'\banalyze\b', r'\bcompare\b',
             r'\btrade-?off\b', r'\bbest approach\b', r'\bevaluate\b',
             r'\bstrategy\b', r'\bwhy\b', r'\bimplications\b', r'\bshould we\b',
             r'\breview\b', r'\boptimize\b', r'\bimprove\b', r'\balternative\b',
-            r'\bpros and cons\b', r'\bdecision\b'
+            r'\bpros and cons\b', r'\bdecision\b', r'\bplan\b',
+            r'\bwhat if\b', r'\bconsequences\b', r'\bprioritize\b'
         ],
         4: [
             r'\bresearch\b', r'\bnovel\b', r'\binnovate\b', r'\btransform\b',
             r'\bframework\b', r'\blong-term\b', r'\bevolve\b', r'\bvision\b',
             r'\bbreakthrough\b', r'\bsystematic\b', r'\bparadigm\b',
-            r'\bfundamental\b', r'\bpioneer\b', r'\bgroundbreaking\b'
+            r'\bfundamental\b', r'\bpioneer\b', r'\bgroundbreaking\b',
+            r'\bsynthesize\b', r'\bcross-disciplinary\b', r'\boriginal\b'
         ]
     }
-    
-    # Stage thresholds
-    STAGE_THRESHOLDS = [
-        (3.5, 5, 7),   # DOK >= 3.5 and domains >= 5 -> Stage 7
-        (3.2, 4, 6),   # DOK >= 3.2 and domains >= 4 -> Stage 6 (solid)
-        (2.8, 3, 6),   # DOK >= 2.8 and domains >= 3 -> Stage 6 (developing)
-        (2.5, 2, 5),   # DOK >= 2.5 and domains >= 2 -> Stage 5 (ready for 6)
-        (2.0, 1, 5),   # DOK >= 2.0 -> Stage 5 (solid)
-        (0.0, 0, 5),   # Default -> Stage 5 (developing)
+
+    # Compression detection: short prompts that carry complex intent
+    COMPRESSION_MAX_WORDS = 8
+    COMPRESSION_INDICATORS = [
+        r'^proceed$', r'^do it$', r'^go$', r'^yes$', r'^continue$',
+        r'^ship it$', r'^deploy$', r'^merge$', r'^lgtm$',
+        r'^next$', r'^done$', r'^send$', r'^push$',
+        r'^run it$', r'^build$', r'^start$', r'^finish$'
     ]
-    
+
+    # Orchestra tier names
+    TM_TIERS = {
+        1: "Solo",
+        2: "Duet",
+        3: "Ensemble",
+        4: "Chamber",
+        5: "Symphony",
+        6: "Virtuoso"
+    }
+
+    # ADT zone names
+    ADT_ZONES = ["Overpowered", "Underutilizing", "Expected", "Growing", "Frontier", "Thinking Ahead"]
+
     DOK_NAMES = {
         1: "Recall & Reproduction",
-        2: "Skills & Application", 
+        2: "Application of Skills & Concepts",
         3: "Strategic Thinking",
         4: "Extended Thinking"
     }
-    
-    STAGE_NAMES = {
-        5: "Senior Developer",
-        6: "Staff/Principal Engineer",
-        7: "Distinguished Engineer"
+
+    DOK_NAMES_SHORT = {
+        1: "Recall",
+        2: "Application",
+        3: "Strategic",
+        4: "Extended"
     }
-    
+
     def __init__(self):
         self.conn = None
-        
+
     def connect(self) -> bool:
-        """Connect to the sessions database"""
         if not self._get_sessions_db().exists():
-            print(f"❌ Sessions database not found at {self._get_sessions_db()}")
+            print(f"Sessions database not found at {self._get_sessions_db()}")
             return False
-        
         try:
             self.conn = sqlite3.connect(str(self._get_sessions_db()))
             self.conn.row_factory = sqlite3.Row
             return True
         except sqlite3.Error as e:
-            print(f"❌ Database connection error: {e}")
+            print(f"Database connection error: {e}")
             return False
-    
+
     def close(self):
-        """Close database connection"""
         if self.conn:
             self.conn.close()
-    
+
+    # ─── Classification ───────────────────────────────────────────────────
+
     def classify_dok(self, text: str) -> Tuple[int, float, List[str]]:
-        """
-        Classify text by DOK level
-        
-        Returns:
-            (dok_level, confidence, matched_patterns)
-        """
         if not text:
-            return (2, 0.3, [])  # Default to DOK 2
-        
+            return (2, 0.3, [])
+
         text_lower = text.lower()
         scores = {1: 0, 2: 0, 3: 0, 4: 0}
         matched = []
-        
+
         for level, patterns in self.DOK_PATTERNS.items():
             for pattern in patterns:
                 if re.search(pattern, text_lower):
                     scores[level] += 1
-                    # Extract the matched word for display
                     match = re.search(pattern, text_lower)
                     if match:
                         matched.append(match.group().strip())
-        
+
         total_matches = sum(scores.values())
         if total_matches == 0:
-            return (2, 0.3, [])  # Default to DOK 2
-        
-        # Find highest scoring level
+            return (2, 0.3, [])
+
         max_score = max(scores.values())
         level = max(k for k, v in scores.items() if v == max_score)
         confidence = max_score / total_matches if total_matches > 0 else 0.3
-        
+
         return (level, min(confidence, 1.0), matched[:5])
-    
+
+    def detect_compression(self, text: str, session_prompt_index: int) -> bool:
+        if not text:
+            return False
+
+        word_count = len(text.split())
+
+        # Short prompt in an established session context (not the first prompt)
+        if word_count <= self.COMPRESSION_MAX_WORDS and session_prompt_index > 2:
+            # Check for known compression patterns
+            text_lower = text.lower().strip()
+            for pattern in self.COMPRESSION_INDICATORS:
+                if re.match(pattern, text_lower):
+                    return True
+            # Short directive-style prompts (imperative, few words)
+            if word_count <= 4 and session_prompt_index > 5:
+                return True
+
+        return False
+
+    def estimate_tm_tier(self, session_data: Dict) -> int:
+        """Estimate Orchestra tier from session characteristics"""
+        conversations = session_data.get('conversations', 0)
+        has_subagents = session_data.get('has_subagents', False)
+        prompt_count = session_data.get('prompt_count', 0)
+        unique_tools = session_data.get('unique_tools', 0)
+
+        if has_subagents and conversations > 50:
+            return 5  # Symphony
+        elif has_subagents or (unique_tools > 5 and conversations > 20):
+            return 4  # Chamber
+        elif prompt_count > 10 and unique_tools > 3:
+            return 3  # Ensemble
+        elif prompt_count > 3:
+            return 2  # Duet
+        else:
+            return 1  # Solo
+
+    def calculate_adt_zone(self, dok_adjusted: float, tm_tier: int) -> str:
+        """Calculate diagnostic zone from DOK x TM matrix"""
+        # Map DOK to a band
+        if dok_adjusted >= 3.0:
+            dok_band = 4
+        elif dok_adjusted >= 2.5:
+            dok_band = 3
+        elif dok_adjusted >= 2.0:
+            dok_band = 2
+        else:
+            dok_band = 1
+
+        # Matrix lookup
+        if tm_tier >= 5:
+            if dok_band >= 3:
+                return "Frontier"
+            elif dok_band == 2:
+                return "Underutilizing"
+            else:
+                return "Overpowered"
+        elif tm_tier >= 3:
+            if dok_band >= 4:
+                return "Frontier"
+            elif dok_band == 3:
+                return "Growing"
+            elif dok_band == 2:
+                return "Expected"
+            else:
+                return "Overpowered"
+        else:  # Tier 1-2
+            if dok_band >= 3:
+                return "Thinking Ahead"
+            elif dok_band == 2:
+                return "Growing"
+            else:
+                return "Expected"
+
+    # ─── Data Access ──────────────────────────────────────────────────────
+
     def get_data_summary(self) -> Dict:
-        """Get summary of available session data"""
         cursor = self.conn.cursor()
-        
         cursor.execute("""
-            SELECT 
+            SELECT
                 MIN(created_at) as earliest,
                 MAX(created_at) as latest,
                 COUNT(*) as total_sessions
@@ -164,27 +247,25 @@ class RPWhyBaseline:
             WHERE session_type = 'user'
         """)
         row = cursor.fetchone()
-        
+
         if not row or not row['earliest']:
             return {'sessions': 0, 'earliest': None, 'latest': None, 'days': 0}
-        
+
         earliest = datetime.fromisoformat(row['earliest'].replace('Z', '+00:00')) if row['earliest'] else None
         latest = datetime.fromisoformat(row['latest'].replace('Z', '+00:00')) if row['latest'] else None
         days = (latest - earliest).days if earliest and latest else 0
-        
+
         return {
             'sessions': row['total_sessions'],
             'earliest': row['earliest'],
             'latest': row['latest'],
             'days': days
         }
-    
+
     def get_all_user_prompts(self) -> List[Dict]:
-        """Get all user text prompts from all sessions"""
         cursor = self.conn.cursor()
-        
         cursor.execute("""
-            SELECT 
+            SELECT
                 m.session_id,
                 s.name as session_name,
                 s.created_at as session_date,
@@ -197,18 +278,17 @@ class RPWhyBaseline:
                 AND s.session_type = 'user'
             ORDER BY m.created_timestamp
         """)
-        
+
         prompts = []
         for row in cursor.fetchall():
             try:
                 content = json.loads(row['content_json'])
-                # Extract text from content array
                 text = None
                 for item in content:
                     if isinstance(item, dict) and item.get('type') == 'text':
                         text = item.get('text', '')
                         break
-                
+
                 if text:
                     prompts.append({
                         'session_id': row['session_id'],
@@ -220,15 +300,65 @@ class RPWhyBaseline:
                     })
             except (json.JSONDecodeError, TypeError):
                 continue
-        
+
         return prompts
-    
-    def get_sessions_by_directory(self) -> Dict[str, List]:
-        """Get sessions grouped by working directory"""
+
+    def get_session_metadata(self) -> Dict[str, Dict]:
+        """Get per-session metadata for TM estimation"""
         cursor = self.conn.cursor()
-        
         cursor.execute("""
-            SELECT 
+            SELECT
+                s.id,
+                s.created_at,
+                s.total_tokens,
+                s.working_dir,
+                COUNT(m.id) as message_count
+            FROM sessions s
+            LEFT JOIN messages m ON m.session_id = s.id AND m.role = 'user'
+            WHERE s.session_type = 'user'
+            GROUP BY s.id
+        """)
+
+        sessions = {}
+        for row in cursor.fetchall():
+            sessions[row['id']] = {
+                'created_at': row['created_at'],
+                'total_tokens': row['total_tokens'] or 0,
+                'working_dir': row['working_dir'],
+                'prompt_count': row['message_count']
+            }
+
+        # Check for tool usage patterns (sub-agent indicators)
+        cursor.execute("""
+            SELECT
+                m.session_id,
+                m.content_json
+            FROM messages m
+            JOIN sessions s ON m.session_id = s.id
+            WHERE m.role = 'assistant'
+                AND s.session_type = 'user'
+        """)
+
+        for row in cursor.fetchall():
+            session_id = row['session_id']
+            if session_id not in sessions:
+                continue
+            try:
+                content = json.loads(row['content_json'])
+                for item in content:
+                    if isinstance(item, dict):
+                        if item.get('type') == 'toolUse' or item.get('type') == 'tool_use':
+                            sessions[session_id]['has_subagents'] = True
+                            sessions[session_id]['unique_tools'] = sessions[session_id].get('unique_tools', 0) + 1
+            except (json.JSONDecodeError, TypeError):
+                continue
+
+        return sessions
+
+    def get_sessions_by_directory(self) -> Dict[str, Dict]:
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            SELECT
                 working_dir,
                 COUNT(*) as session_count,
                 SUM(total_tokens) as total_tokens
@@ -237,369 +367,937 @@ class RPWhyBaseline:
             GROUP BY working_dir
             ORDER BY session_count DESC
         """)
-        
+
         return {row['working_dir']: {
             'count': row['session_count'],
             'tokens': row['total_tokens'] or 0
         } for row in cursor.fetchall()}
-    
-    def get_weekly_breakdown(self, prompts: List[Dict]) -> List[Dict]:
-        """Calculate DOK scores by week"""
-        weekly = defaultdict(list)
-        
+
+    # ─── Analysis ─────────────────────────────────────────────────────────
+
+    def analyze_prompts(self, prompts: List[Dict]) -> Dict:
+        """Full analysis of a set of prompts"""
+        dok_counts = {1: 0, 2: 0, 3: 0, 4: 0}
+        dok_scores = []
+        compressed_count = 0
+        adjusted_scores = []
+        peak_prompt = None
+        peak_dok = 0
+
+        # Group by session for compression detection
+        session_prompts = defaultdict(list)
+        for prompt in prompts:
+            session_prompts[prompt['session_id']].append(prompt)
+
+        for session_id, s_prompts in session_prompts.items():
+            for idx, prompt in enumerate(s_prompts):
+                dok_level, confidence, matched = self.classify_dok(prompt['text'])
+                dok_counts[dok_level] += 1
+                dok_scores.append(dok_level)
+
+                # Compression detection
+                is_compressed = self.detect_compression(prompt['text'], idx)
+                if is_compressed:
+                    compressed_count += 1
+                    adjusted_level = min(dok_level + 1, 4)
+                else:
+                    adjusted_level = dok_level
+
+                adjusted_scores.append(adjusted_level)
+
+                # Track peak
+                if adjusted_level > peak_dok or (adjusted_level == peak_dok and peak_prompt is None):
+                    peak_dok = adjusted_level
+                    peak_prompt = prompt
+
+        total_prompts = sum(dok_counts.values())
+        if total_prompts == 0:
+            return {'error': 'no_prompts'}
+
+        # Calculate metrics
+        avg_dok_raw = sum(dok_scores) / len(dok_scores)
+        avg_dok_adjusted = sum(adjusted_scores) / len(adjusted_scores)
+        dok_3_4_pct = ((dok_counts[3] + dok_counts[4]) / total_prompts) * 100
+        compression_pct = (compressed_count / total_prompts) * 100
+
+        dok_distribution = {
+            f'dok{k}': round(v / total_prompts * 100, 1)
+            for k, v in dok_counts.items()
+        }
+        dok_distribution_counts = {f'dok{k}_count': v for k, v in dok_counts.items()}
+
+        return {
+            'total_prompts': total_prompts,
+            'dok_raw': round(avg_dok_raw, 2),
+            'dok_adjusted': round(avg_dok_adjusted, 2),
+            'dok_lift': round(avg_dok_adjusted - avg_dok_raw, 3),
+            'dok_3_4_pct': round(dok_3_4_pct, 1),
+            'compression_pct': round(compression_pct, 1),
+            'compressed_count': compressed_count,
+            'dok_distribution': dok_distribution,
+            'dok_distribution_counts': dok_distribution_counts,
+            'peak_prompt': peak_prompt,
+            'peak_dok': peak_dok,
+        }
+
+    def get_daily_breakdown(self, prompts: List[Dict]) -> List[Dict]:
+        """Calculate DOK scores by day"""
+        daily = defaultdict(list)
+
         for prompt in prompts:
             if prompt.get('session_date'):
                 try:
                     date = datetime.fromisoformat(prompt['session_date'].replace('Z', '+00:00'))
-                    week = date.strftime('%Y-W%W')
+                    day = date.strftime('%Y-%m-%d')
                     dok_level, _, _ = self.classify_dok(prompt['text'])
-                    weekly[week].append(dok_level)
+                    daily[day].append(dok_level)
                 except (ValueError, TypeError):
                     continue
-        
+
         result = []
-        for week in sorted(weekly.keys()):
-            scores = weekly[week]
+        for day in sorted(daily.keys()):
+            scores = daily[day]
             avg = sum(scores) / len(scores) if scores else 0
+            dok3_4 = sum(1 for s in scores if s >= 3) / len(scores) * 100 if scores else 0
             result.append({
-                'week': week,
+                'date': day,
                 'avg_dok': round(avg, 2),
-                'prompt_count': len(scores)
+                'prompt_count': len(scores),
+                'dok3_4_pct': round(dok3_4, 1)
             })
-        
+
         return result
-    
-    def estimate_stage(self, avg_dok: float, domain_count: int) -> int:
-        """Estimate Gas Town stage based on DOK and domain breadth"""
-        for dok_threshold, domain_threshold, stage in self.STAGE_THRESHOLDS:
-            if avg_dok >= dok_threshold and domain_count >= domain_threshold:
-                return stage
-        return 5
-    
-    def calculate_trajectory(self, weekly_scores: List[Dict]) -> str:
-        """Determine if DOK is improving, stable, or declining"""
-        if len(weekly_scores) < 2:
+
+    def detect_phases(self, daily_scores: List[Dict]) -> List[Dict]:
+        """Auto-detect phases based on DOK trajectory shifts"""
+        if len(daily_scores) < 7:
+            return [{'name': 'Current', 'start': daily_scores[0]['date'] if daily_scores else '',
+                     'end': daily_scores[-1]['date'] if daily_scores else '',
+                     'sessions': len(daily_scores)}]
+
+        # Simple phase detection: split into roughly equal chunks
+        # based on trajectory inflection points
+        total_days = len(daily_scores)
+
+        if total_days < 14:
+            return [{
+                'name': '1. Current',
+                'start': daily_scores[0]['date'],
+                'end': daily_scores[-1]['date'],
+                'sessions': total_days,
+                'avg_dok': round(sum(d['avg_dok'] for d in daily_scores) / total_days, 2),
+                'dok3_4_pct': round(sum(d['dok3_4_pct'] for d in daily_scores) / total_days, 1)
+            }]
+
+        # Split into quarters for phase analysis
+        quarter = total_days // 4
+        phases = []
+        phase_names = ['1. Early', '2. Building', '3. Middle', '4. Recent']
+
+        for i, name in enumerate(phase_names):
+            start_idx = i * quarter
+            end_idx = (i + 1) * quarter if i < 3 else total_days
+            chunk = daily_scores[start_idx:end_idx]
+
+            if chunk:
+                phases.append({
+                    'name': name,
+                    'start': chunk[0]['date'],
+                    'end': chunk[-1]['date'],
+                    'sessions': len(chunk),
+                    'avg_dok': round(sum(d['avg_dok'] for d in chunk) / len(chunk), 2),
+                    'dok3_4_pct': round(sum(d['dok3_4_pct'] for d in chunk) / len(chunk), 1)
+                })
+
+        return phases
+
+    def calculate_trajectory(self, daily_scores: List[Dict]) -> str:
+        if len(daily_scores) < 4:
             return "insufficient_data"
-        
-        # Compare first half to second half
-        mid = len(weekly_scores) // 2
-        first_half = [w['avg_dok'] for w in weekly_scores[:mid]]
-        second_half = [w['avg_dok'] for w in weekly_scores[mid:]]
-        
+
+        mid = len(daily_scores) // 2
+        first_half = [d['avg_dok'] for d in daily_scores[:mid]]
+        second_half = [d['avg_dok'] for d in daily_scores[mid:]]
+
         first_avg = sum(first_half) / len(first_half) if first_half else 0
         second_avg = sum(second_half) / len(second_half) if second_half else 0
-        
+
         diff = second_avg - first_avg
-        
-        if diff > 0.2:
+
+        if diff > 0.15:
             return "improving"
-        elif diff < -0.2:
+        elif diff < -0.15:
             return "declining"
         else:
             return "stable"
-    
+
+    # ─── Baseline Generation ──────────────────────────────────────────────
+
     def generate_baseline(self) -> Dict:
-        """Generate complete baseline analysis"""
         if not self.connect():
             return None
-        
+
         try:
-            # Get data summary
             summary = self.get_data_summary()
-            
             if summary['sessions'] == 0:
-                return {
-                    'error': 'no_data',
-                    'message': 'No sessions found in database'
-                }
-            
-            # Get all prompts
+                return {'error': 'no_data', 'message': 'No sessions found in database'}
+
             prompts = self.get_all_user_prompts()
-            
-            # Classify all prompts
-            dok_counts = {1: 0, 2: 0, 3: 0, 4: 0}
-            dok_scores = []
-            
-            for prompt in prompts:
-                dok_level, confidence, _ = self.classify_dok(prompt['text'])
-                dok_counts[dok_level] += 1
-                dok_scores.append(dok_level)
-            
-            total_prompts = sum(dok_counts.values())
-            
-            # Calculate distributions
-            dok_distribution = {
-                f'dok{k}': round(v / total_prompts * 100, 1) if total_prompts > 0 else 0
-                for k, v in dok_counts.items()
-            }
-            dok_distribution_counts = {f'dok{k}_count': v for k, v in dok_counts.items()}
-            
-            # Calculate average DOK
-            avg_dok = sum(dok_scores) / len(dok_scores) if dok_scores else 2.0
-            
-            # Get domain info
+            analysis = self.analyze_prompts(prompts)
+
+            if 'error' in analysis:
+                return {'error': 'no_prompts', 'message': 'No classifiable prompts found'}
+
+            # Get session metadata for TM estimation
+            session_meta = self.get_session_metadata()
             directories = self.get_sessions_by_directory()
-            domain_count = len(directories)
-            
-            # Get weekly breakdown
-            weekly_scores = self.get_weekly_breakdown(prompts)
-            
-            # Calculate trajectory
-            trajectory = self.calculate_trajectory(weekly_scores)
-            
-            # Estimate stage
-            estimated_stage = self.estimate_stage(avg_dok, domain_count)
-            
-            # Build baseline
+
+            # Estimate overall TM tier
+            tm_tiers = []
+            for sid, meta in session_meta.items():
+                tier = self.estimate_tm_tier(meta)
+                tm_tiers.append(tier)
+            avg_tm = round(sum(tm_tiers) / len(tm_tiers)) if tm_tiers else 2
+
+            # Calculate ADT zone
+            adt_zone = self.calculate_adt_zone(analysis['dok_adjusted'], avg_tm)
+
+            # Daily breakdown for trajectory
+            daily_scores = self.get_daily_breakdown(prompts)
+            trajectory = self.calculate_trajectory(daily_scores)
+
+            # Calculate floor (10th percentile DOK)
+            all_daily_doks = sorted([d['avg_dok'] for d in daily_scores])
+            floor_idx = max(0, len(all_daily_doks) // 10)
+            floor = all_daily_doks[floor_idx] if all_daily_doks else 1.0
+
+            # Growth targets
+            current_dok34 = analysis['dok_3_4_pct']
+            dok34_target = min(current_dok34 + 15, 50)
+            compression_target = max(analysis['compression_pct'] + 5, 5)
+
             baseline = {
+                'version': '4.0',
                 'generated_at': datetime.now().isoformat(),
                 'period': {
-                    'start': summary['earliest'],
-                    'end': summary['latest'],
+                    'start': summary['earliest'][:10] if summary['earliest'] else None,
+                    'end': summary['latest'][:10] if summary['latest'] else None,
                     'days': summary['days']
                 },
                 'sessions_analyzed': summary['sessions'],
-                'prompts_classified': total_prompts,
-                'dok_distribution': dok_distribution,
-                'dok_distribution_counts': dok_distribution_counts,
-                'average_dok_score': round(avg_dok, 2),
-                'estimated_stage': estimated_stage,
-                'domain_count': domain_count,
-                'domains': {k: v for k, v in list(directories.items())[:10]},
+                'prompts_classified': analysis['total_prompts'],
+                'three_dimensions': {
+                    'dok_adjusted': analysis['dok_adjusted'],
+                    'dok_raw': analysis['dok_raw'],
+                    'dok_lift': analysis['dok_lift'],
+                    'tm_tier': avg_tm,
+                    'tm_name': self.TM_TIERS.get(avg_tm, 'Unknown'),
+                    'adt_zone': adt_zone
+                },
+                'dok_distribution': analysis['dok_distribution'],
+                'dok_distribution_counts': analysis['dok_distribution_counts'],
+                'dok_3_4_pct': analysis['dok_3_4_pct'],
+                'compression_pct': analysis['compression_pct'],
+                'floor': round(floor, 2),
                 'trajectory': trajectory,
-                'weekly_scores': weekly_scores[-12:],  # Last 12 weeks
+                'domain_count': len(directories),
+                'domains': {k: v for k, v in list(directories.items())[:10]},
+                'daily_scores': daily_scores[-30:],  # Last 30 days
+                'growth_targets': {
+                    'dok_3_4_pct': round(dok34_target, 1),
+                    'compression_pct': round(compression_target, 1),
+                    'next_tm_tier': min(avg_tm + 1, 6),
+                    'next_tm_name': self.TM_TIERS.get(min(avg_tm + 1, 6), 'Virtuoso')
+                },
+                # Preserve v3 fields for backward compat
+                'average_dok_score': analysis['dok_adjusted'],
+                'estimated_stage': self._tm_to_gas_town(avg_tm),
             }
-            
+
             return baseline
-            
+
         finally:
             self.close()
-    
+
+    def _tm_to_gas_town(self, tm_tier: int) -> int:
+        """Map TM tier back to Gas Town stage for backward compat"""
+        mapping = {1: 2, 2: 3, 3: 4, 4: 5, 5: 6, 6: 7}
+        return mapping.get(tm_tier, 5)
+
+    def _gas_town_to_tm(self, stage: int) -> int:
+        """Map Gas Town stage to TM tier (for reading v3 baselines)"""
+        if stage <= 2:
+            return 1
+        elif stage == 3:
+            return 2
+        elif stage == 4:
+            return 3
+        elif stage == 5:
+            return 4
+        elif stage == 6:
+            return 5
+        else:
+            return 6
+
+    # ─── Baseline I/O ─────────────────────────────────────────────────────
+
     def save_baseline(self, baseline: Dict) -> bool:
-        """Save baseline to config file"""
         try:
             self._get_baseline_file().parent.mkdir(parents=True, exist_ok=True)
             with open(self._get_baseline_file(), 'w') as f:
                 json.dump(baseline, f, indent=2)
             return True
         except IOError as e:
-            print(f"❌ Error saving baseline: {e}")
+            print(f"Error saving baseline: {e}")
             return False
-    
+
     def load_baseline(self) -> Optional[Dict]:
-        """Load existing baseline"""
         if not self._get_baseline_file().exists():
             return None
-        
+
         try:
             with open(self._get_baseline_file(), 'r') as f:
-                return json.load(f)
+                baseline = json.load(f)
+
+            # Migrate v3 baseline to v4 format if needed
+            if 'version' not in baseline or baseline.get('version', '3.0') < '4.0':
+                baseline = self._migrate_v3_baseline(baseline)
+
+            return baseline
         except (IOError, json.JSONDecodeError) as e:
-            print(f"❌ Error loading baseline: {e}")
+            print(f"Error loading baseline: {e}")
             return None
-    
-    def format_bar(self, percentage: float, width: int = 10) -> str:
-        """Create a visual progress bar"""
+
+    def _migrate_v3_baseline(self, old: Dict) -> Dict:
+        """Translate a v3 (Gas Town x DOK) baseline to v4 (Three Dimensions)"""
+        stage = old.get('estimated_stage', 5)
+        tm_tier = self._gas_town_to_tm(stage)
+        dok = old.get('average_dok_score', 2.0)
+        adt_zone = self.calculate_adt_zone(dok, tm_tier)
+
+        # Map old quadrant names to new zone names
+        quadrant_map = {
+            'Learning Zone': 'Expected',
+            'Frontier': 'Frontier',
+            'Thinking Ahead': 'Thinking Ahead',
+            'Underutilizing': 'Underutilizing',
+            'Overpowered': 'Overpowered',
+            'Growing': 'Growing'
+        }
+        old_quadrant = old.get('quadrant', '')
+        if old_quadrant in quadrant_map:
+            adt_zone = quadrant_map[old_quadrant]
+
+        migrated = {
+            'version': '4.0',
+            'migrated_from': '3.0',
+            'generated_at': old.get('generated_at', ''),
+            'period': old.get('period', {}),
+            'sessions_analyzed': old.get('sessions_analyzed', 0),
+            'prompts_classified': old.get('prompts_classified', 0),
+            'three_dimensions': {
+                'dok_adjusted': dok,
+                'dok_raw': dok,
+                'dok_lift': 0.0,
+                'tm_tier': tm_tier,
+                'tm_name': self.TM_TIERS.get(tm_tier, 'Unknown'),
+                'adt_zone': adt_zone
+            },
+            'dok_distribution': old.get('dok_distribution', {}),
+            'dok_distribution_counts': old.get('dok_distribution_counts', {}),
+            'dok_3_4_pct': old.get('dok_distribution', {}).get('dok3', 0) + old.get('dok_distribution', {}).get('dok4', 0),
+            'compression_pct': 0.0,
+            'floor': dok - 0.3,
+            'trajectory': old.get('trajectory', 'stable'),
+            'domain_count': old.get('domain_count', 0),
+            'domains': old.get('domains', {}),
+            'growth_targets': {
+                'dok_3_4_pct': old.get('growth_targets', {}).get('dok3_percentage_target', 35),
+                'compression_pct': 5.0,
+                'next_tm_tier': min(tm_tier + 1, 6),
+                'next_tm_name': self.TM_TIERS.get(min(tm_tier + 1, 6), 'Virtuoso')
+            },
+            # Preserve v3 fields
+            'average_dok_score': dok,
+            'estimated_stage': stage,
+        }
+
+        return migrated
+
+    # ─── Report Formatting ────────────────────────────────────────────────
+
+    def format_bar(self, percentage: float, width: int = 20) -> str:
         filled = int(percentage / 100 * width)
-        return '█' * filled + '░' * (width - filled)
-    
+        return '\u2588' * filled + '\u2591' * (width - filled)
+
     def print_baseline_report(self, baseline: Dict):
-        """Print formatted baseline report"""
         if 'error' in baseline:
-            print(f"\n❌ {baseline['message']}")
+            print(f"\n{baseline['message']}")
             return
-        
+
         sessions = baseline['sessions_analyzed']
-        
-        # Determine report type based on data volume
+        dims = baseline.get('three_dimensions', {})
+
+        # Data volume warning
         if sessions < 5:
-            print("\n⚠️  LIMITED DATA AVAILABLE")
-            print("─" * 62)
-            print(f"Found only {sessions} sessions. This baseline will improve as you use Goose more.")
+            print("\n  LIMITED DATA AVAILABLE")
+            print("  " + "-" * 60)
+            print(f"  Found only {sessions} sessions. Baseline will improve with more data.")
             print()
-        elif sessions < 20:
-            print("\n📊 EARLY BASELINE")
-            print("─" * 62)
-            print(f"Based on {sessions} sessions. Trends may stabilize with more data.")
-            print()
-        
-        # Main report
-        print("╔══════════════════════════════════════════════════════════════╗")
-        print("║       🪞 RP-WHY INIT: Baseline Analysis                      ║")
-        print("╚══════════════════════════════════════════════════════════════╝")
+
         print()
-        
+        print("=" * 66)
+        print("                    rp-why . BASELINE")
+        print("=" * 66)
+        print()
+
         # Data Summary
-        print("📊 DATA SUMMARY")
-        print("─" * 62)
-        period = baseline['period']
-        print(f"Period Analyzed: {period['start'][:10]} to {period['end'][:10]} ({period['days']} days)")
-        print(f"Sessions Analyzed: {baseline['sessions_analyzed']} sessions")
-        print(f"Prompts Classified: {baseline['prompts_classified']} user prompts")
+        print("DATA SUMMARY")
+        print("-" * 66)
+        period = baseline.get('period', {})
+        start = period.get('start', 'unknown')
+        end = period.get('end', 'unknown')
+        days = period.get('days', 0)
+        print(f"Period:           {start} - {end} ({days} days)")
+        print(f"Sessions:         {sessions}")
+        print(f"Prompts:          {baseline.get('prompts_classified', 0)} classified")
         print()
-        
+
+        # Three Dimensions
+        print("THREE DIMENSIONS")
+        print("-" * 66)
+        dok = dims.get('dok_adjusted', 0)
+        tm_tier = dims.get('tm_tier', 2)
+        tm_name = dims.get('tm_name', 'Unknown')
+        adt_zone = dims.get('adt_zone', 'Unknown')
+        print(f"DOK (Depth of Knowledge)     {dok:.2f}")
+        print(f"TM  (Tool Maturity)          Tier {tm_tier} . {tm_name}")
+        print(f"ADT (Delegation Trust)       {adt_zone}")
+        print()
+
+        # Diagnostic Zone
+        print(f"DIAGNOSTIC ZONE: {adt_zone}")
+        print("-" * 66)
+        zone_descriptions = {
+            'Frontier': 'TM and DOK matched and growing together. Operating at the\nproductive edge.',
+            'Growing': 'Approaching a match between tool sophistication and cognitive\ndepth. Building toward effective use.',
+            'Expected': 'Tool usage and cognitive depth appropriate for current level.\nHealthy starting position.',
+            'Thinking Ahead': 'Cognitive depth exceeds tool sophistication. Opportunity to\nadopt more powerful orchestration patterns.',
+            'Underutilizing': 'Tool sophistication exceeds cognitive depth. Opportunity to\ndeepen the questions being asked.',
+            'Overpowered': 'Significant mismatch between tool complexity and task depth.\nResources spent without proportional cognitive return.'
+        }
+        print(zone_descriptions.get(adt_zone, ''))
+        print()
+
         # DOK Distribution
-        print("📈 OVERALL DOK DISTRIBUTION")
-        print("─" * 62)
-        dist = baseline['dok_distribution']
-        counts = baseline['dok_distribution_counts']
+        print("DOK DISTRIBUTION")
+        print("-" * 66)
+        dist = baseline.get('dok_distribution', {})
         for i in range(1, 5):
-            pct = dist[f'dok{i}']
-            count = counts[f'dok{i}_count']
+            pct = dist.get(f'dok{i}', 0)
             bar = self.format_bar(pct)
-            print(f"DOK {i} ({self.DOK_NAMES[i][:11]:11}): {bar} {pct:5.1f}%  ({count} prompts)")
+            print(f"DOK {i} ({self.DOK_NAMES_SHORT[i]:11}):  {bar}  {pct:5.1f}%")
         print()
-        
-        # Weekly Trend
-        weekly = baseline.get('weekly_scores', [])
-        if len(weekly) >= 2:
-            print("📉 DOK TREND OVER TIME")
-            print("─" * 62)
-            for week_data in weekly[-6:]:  # Show last 6 weeks
-                week = week_data['week']
-                avg = week_data['avg_dok']
-                bar = self.format_bar(avg / 4 * 100)
-                print(f"{week}: {avg:.1f} {bar}")
-            
-            trajectory = baseline['trajectory']
-            trajectory_symbol = {'improving': '↑', 'stable': '→', 'declining': '↓'}.get(trajectory, '?')
-            print(f"\nTrajectory: {trajectory_symbol} {trajectory.title()}")
-            print()
-        
-        # Baseline Assessment
-        print("🎯 BASELINE ASSESSMENT")
-        print("─" * 62)
-        avg_dok = baseline['average_dok_score']
-        stage = baseline['estimated_stage']
-        print(f"Average DOK Score: {avg_dok:.2f}")
-        print(f"Estimated Gas Town Stage: Stage {stage} ({self.STAGE_NAMES[stage]})")
-        print(f"Domain Breadth: {baseline['domain_count']} unique working directories")
+        print(f"DOK 3+4:  {baseline.get('dok_3_4_pct', 0):.1f}%")
+        print(f"Compression:  {baseline.get('compression_pct', 0):.1f}%")
         print()
-        
-        # Domain Coverage
-        domains = baseline.get('domains', {})
-        if domains:
-            print("🗺️  DOMAIN COVERAGE")
-            print("─" * 62)
-            for i, (path, info) in enumerate(list(domains.items())[:5], 1):
-                short_path = path.replace(str(Path.home()), '~')
-                if len(short_path) > 40:
-                    short_path = '...' + short_path[-37:]
-                print(f"{i}. {short_path:40} - {info['count']} sessions")
-            print()
-        
-        # Insights
-        print("💡 BASELINE INSIGHTS")
-        print("─" * 62)
-        
-        # Find dominant DOK
-        max_dok = max(range(1, 5), key=lambda x: dist[f'dok{x}'])
-        print(f"1. 📊 {dist[f'dok{max_dok}']:.0f}% of your work is DOK {max_dok} ({self.DOK_NAMES[max_dok]})")
-        
-        # Trajectory insight
-        if baseline['trajectory'] == 'improving':
-            print("2. 📈 Your cognitive complexity is trending upward - great progress!")
-        elif baseline['trajectory'] == 'declining':
-            print("2. 📉 DOK trending down - consider taking on more strategic work")
-        else:
-            print("2. → Your DOK level is stable - push for more DOK 3+ work to grow")
-        
-        # Stage insight
-        if stage == 5 and avg_dok >= 2.5:
-            print("3. 🎯 You're showing Stage 6 potential - focus on cross-team impact")
-        elif stage == 5:
-            print("3. 💡 Opportunity: Ask 'why' and 'what are the trade-offs' more often")
-        else:
-            print("3. 🌟 Strong strategic thinking - document and share your approaches")
+
+        # Growth Targets
+        targets = baseline.get('growth_targets', {})
+        print("GROWTH TARGETS")
+        print("-" * 66)
+        print(f"DOK 3+4 target:       {targets.get('dok_3_4_pct', 35):.0f}%")
+        print(f"Compression target:   {targets.get('compression_pct', 5):.0f}%")
+        next_tier = targets.get('next_tm_tier', tm_tier + 1)
+        next_name = targets.get('next_tm_name', '')
+        tier_descriptions = {
+            2: 'back-and-forth conversation',
+            3: 'provide meaningful body of work, evaluate holistically',
+            4: 'delegate work streams, introduce sub-agents',
+            5: 'coordinate multiple AI interactions toward unified goal',
+            6: 'flow state, human and AI synthesized'
+        }
+        tier_desc = tier_descriptions.get(next_tier, '')
+        print(f"Next TM tier:         Tier {next_tier} . {next_name} ({tier_desc})")
         print()
-        
-        # Recommendations
-        print("🎯 RECOMMENDED FOCUS AREAS")
-        print("─" * 62)
-        next_stage = min(stage + 1, 7)
-        print(f"To progress from Stage {stage} to Stage {next_stage}:")
-        
-        if dist['dok3'] + dist['dok4'] < 40:
-            print("1. Increase DOK 3+ work - ask 'why' before implementing")
-        else:
-            print("1. Maintain strategic focus - you're doing well on DOK 3+ work")
-        
-        if baseline['domain_count'] < 3:
-            print("2. Expand domain breadth - contribute to 1-2 new areas")
-        else:
-            print("2. Deepen cross-domain expertise - look for patterns across projects")
-        
-        print("3. Document your decisions - capture reasoning for organizational learning")
-        print()
-        
+
         # Footer
-        print("─" * 62)
-        print(f"Baseline Generated: {baseline['generated_at'][:19]}")
+        print("-" * 66)
         print(f"Baseline saved to: {self._get_baseline_file()}")
+        print("Run /rp-why current after sessions to track progress.")
         print()
-        print("💡 Run /rp-why after sessions to track progress against this baseline.")
-        print("💡 Run /rp-why compare to see how your current session compares.")
+
+    def print_current_report(self, analysis: Dict, session_meta: Dict = None):
+        if 'error' in analysis:
+            print(f"\n{analysis.get('message', 'No data available')}")
+            return
+
+        # Estimate TM from session metadata
+        tm_tier = 2  # Default
+        if session_meta:
+            tm_tier = self.estimate_tm_tier(session_meta)
+
+        dok_adj = analysis['dok_adjusted']
+        adt_zone = self.calculate_adt_zone(dok_adj, tm_tier)
+
+        print()
+        print("=" * 66)
+        print("                    rp-why . CURRENT SESSION")
+        print("=" * 66)
+        print()
+
+        # Session Snapshot
+        print("SESSION SNAPSHOT")
+        print("-" * 66)
+        print(f"Date:             {datetime.now().strftime('%b %d, %Y')}")
+        print(f"Prompts:          {analysis['total_prompts']} classified")
+        print()
+
+        # Three Dimensions
+        print("THREE DIMENSIONS")
+        print("-" * 66)
+        print(f"DOK (Adjusted)       {dok_adj:.2f}")
+        print(f"TM  (Tool Maturity)  Tier {tm_tier} . {self.TM_TIERS[tm_tier]}")
+        print(f"ADT (Delegation)     {adt_zone}")
+        print()
+
+        # Diagnostic Zone
+        print(f"DIAGNOSTIC ZONE: {adt_zone}")
+        print("-" * 66)
+        zone_descriptions = {
+            'Frontier': 'TM and DOK matched and growing together. Operating at the\nproductive edge.',
+            'Growing': 'Approaching a match. Building toward effective use of the\ncurrent toolset.',
+            'Expected': 'Appropriate match for current level. Growth comes from\nasking "why" before implementing.',
+            'Thinking Ahead': 'Cognitive depth exceeds tools. Time to adopt more powerful\norchestration patterns.',
+            'Underutilizing': 'Powerful tools deserve powerful questions. Opportunity to\ndeepen the questions being asked.',
+            'Overpowered': 'Tools exceed task needs. Consider whether this task needs\nan autonomous agent.'
+        }
+        print(zone_descriptions.get(adt_zone, ''))
+        print()
+
+        # DOK Distribution
+        print("DOK DISTRIBUTION")
+        print("-" * 66)
+        dist = analysis['dok_distribution']
+        for i in range(1, 5):
+            pct = dist.get(f'dok{i}', 0)
+            bar = self.format_bar(pct)
+            print(f"DOK {i} ({self.DOK_NAMES_SHORT[i]:11}):  {bar}  {pct:5.1f}%")
+        print()
+        print(f"DOK 3+4:  {analysis['dok_3_4_pct']:.1f}%     Compression:  {analysis['compression_pct']:.1f}%")
+        print()
+
+        # Peak Moment
+        peak = analysis.get('peak_prompt')
+        if peak:
+            peak_text = peak['text'][:70] + '...' if len(peak['text']) > 70 else peak['text']
+            peak_dok = analysis['peak_dok']
+            print("PEAK MOMENT")
+            print("-" * 66)
+            print(f'"{peak_text}"')
+            print(f"  DOK {peak_dok} . {self.DOK_NAMES[peak_dok]}")
+            print()
+
+        # Growth Nudge
+        print("GROWTH NUDGE")
+        print("-" * 66)
+        nudges = {
+            'Frontier': 'Strong session. The collaboration is matched and productive.\nConsider extending one thread into a multi-session investigation.',
+            'Growing': 'Building momentum. Try framing one more task as a design\ndecision rather than an execution request.',
+            'Expected': 'Solid foundation. Ask "what are the trade-offs?" before your\nnext implementation prompt.',
+            'Thinking Ahead': 'Your thinking exceeds your tools. Try delegating a work\nstream to a sub-agent or multi-step workflow.',
+            'Underutilizing': 'Powerful tools available. Before each prompt: can this be\nmore strategic? Batch simple queries.',
+            'Overpowered': 'Consider whether this task needs an autonomous agent.\nRedirect toward problems requiring analysis or design.'
+        }
+        print(nudges.get(adt_zone, ''))
+        print()
+
+        # Reflection
+        reflections = {
+            'Frontier': 'What complex challenge could benefit from sustained\n   exploration across your next few sessions?',
+            'Growing': 'What workflow could you delegate more fully to the agent?',
+            'Expected': 'What strategic question have you been avoiding?',
+            'Thinking Ahead': 'What tool or workflow would unlock the depth you are\n   already thinking at?',
+            'Underutilizing': 'What is the most strategic question you could ask right now?',
+            'Overpowered': 'Is there a harder problem this tool should be pointed at?'
+        }
+        reflection = reflections.get(adt_zone, 'What could you explore more deeply?')
+        print(f"  {reflection}")
+        print()
+
+    def print_compare_report(self, baseline: Dict, current: Dict):
+        if 'error' in current:
+            print(f"\n{current.get('message', 'No current data')}")
+            return
+
+        dims_b = baseline.get('three_dimensions', {})
+        dok_b = dims_b.get('dok_adjusted', 0)
+        tm_b = dims_b.get('tm_tier', 2)
+        adt_b = dims_b.get('adt_zone', 'Unknown')
+
+        # Current dimensions (estimate TM from prompt count)
+        dok_c = current['dok_adjusted']
+        # For compare, estimate TM from current session characteristics
+        tm_c = tm_b  # Default to baseline TM unless we have better data
+        if current['total_prompts'] > 20 and current.get('compressed_count', 0) > 3:
+            tm_c = max(tm_b, 4)
+        adt_c = self.calculate_adt_zone(dok_c, tm_c)
+
+        period = baseline.get('period', {})
+        period_str = f"{period.get('start', '?')} - {period.get('end', '?')}"
+
+        print()
+        print("=" * 66)
+        print("                    rp-why . COMPARE")
+        print("=" * 66)
+        print()
+        print(f"COMPARING: Today ({datetime.now().strftime('%b %d')}) vs. Baseline ({period_str})")
+        print()
+
+        # Three Dimensions comparison
+        print(f"{'THREE DIMENSIONS':<24} {'Baseline':>12} {'Today':>12} {'':>8}")
+        print("-" * 66)
+        dok_delta = dok_c - dok_b
+        dok_pct = (dok_delta / dok_b * 100) if dok_b > 0 else 0
+        print(f"{'DOK (Adjusted)':<24} {dok_b:>12.2f} {dok_c:>12.2f} {f'+{dok_pct:.0f}%' if dok_pct >= 0 else f'{dok_pct:.0f}%':>8}")
+        print(f"{'TM  (Tool Maturity)':<24} {'Tier ' + str(tm_b):>12} {'Tier ' + str(tm_c):>12} {f'+{tm_c - tm_b}' if tm_c > tm_b else ('=' if tm_c == tm_b else str(tm_c - tm_b)):>8}")
+        arrow = '=' if adt_b == adt_c else '>'
+        print(f"{'ADT (Delegation Trust)':<24} {adt_b:>12} {adt_c:>12} {'':>8}")
+        print()
+
+        # Diagnostic Zone transition
+        if adt_b != adt_c:
+            print(f"DIAGNOSTIC ZONE: {adt_b} -> {adt_c}")
+        else:
+            print(f"DIAGNOSTIC ZONE: {adt_c} (sustained)")
+        print("-" * 66)
+        print()
+
+        # DOK Distribution comparison
+        dist_b = baseline.get('dok_distribution', {})
+        dist_c = current.get('dok_distribution', {})
+
+        print(f"{'DOK DISTRIBUTION':<24} {'Baseline':>12} {'Today':>12} {'':>8}")
+        print("-" * 66)
+        for i in range(1, 5):
+            pct_b = dist_b.get(f'dok{i}', 0)
+            pct_c = dist_c.get(f'dok{i}', 0)
+            delta = pct_c - pct_b
+            delta_str = f"+{delta:.1f}pp" if delta >= 0 else f"{delta:.1f}pp"
+            print(f"DOK {i} ({self.DOK_NAMES_SHORT[i]:11})   {pct_b:>10.1f}% {pct_c:>10.1f}% {delta_str:>8}")
+        print()
+
+        dok34_b = baseline.get('dok_3_4_pct', 0)
+        dok34_c = current.get('dok_3_4_pct', 0)
+        dok34_delta = dok34_c - dok34_b
+        comp_b = baseline.get('compression_pct', 0)
+        comp_c = current.get('compression_pct', 0)
+        comp_delta = comp_c - comp_b
+
+        print(f"{'DOK 3+4':<24} {dok34_b:>10.1f}% {dok34_c:>10.1f}% {f'+{dok34_delta:.1f}pp' if dok34_delta >= 0 else f'{dok34_delta:.1f}pp':>8}")
+        comp_label = "emerged" if comp_b == 0 and comp_c > 0 else (f"+{comp_delta:.1f}pp" if comp_delta >= 0 else f"{comp_delta:.1f}pp")
+        print(f"{'Compression':<24} {comp_b:>10.1f}% {comp_c:>10.1f}% {comp_label:>8}")
+        print()
+
+        # Trajectory
+        print("TRAJECTORY")
+        print("-" * 66)
+        if dok_delta > 0.1:
+            direction = "Improving"
+            arrow = "^"
+        elif dok_delta < -0.1:
+            direction = "Declining"
+            arrow = "v"
+        else:
+            direction = "Stable"
+            arrow = "="
+        print(f"Direction:  {arrow} {direction}")
+
+        # Signal interpretation
+        signals = []
+        if dok34_delta > 10:
+            signals.append(f"DOK 3+4 jumped {dok34_delta:.0f}pp. Strategic thinking increased significantly.")
+        elif dok34_delta > 5:
+            signals.append(f"DOK 3+4 up {dok34_delta:.0f}pp. More strategic work in this session.")
+        elif dok34_delta < -5:
+            signals.append(f"DOK 3+4 down {abs(dok34_delta):.0f}pp. Execution-heavy session (expected for delegation days).")
+
+        if comp_c > 0 and comp_b == 0:
+            signals.append("Compression emerged. Short directives now carry complex intent.")
+        elif comp_delta > 5:
+            signals.append(f"Compression up {comp_delta:.0f}pp. Trust deepening in the collaboration.")
+
+        if signals:
+            print(f"Signal:     {signals[0]}")
+            for s in signals[1:]:
+                print(f"            {s}")
+        print()
+
+        # What Shifted
+        print("WHAT SHIFTED")
+        print("-" * 66)
+        shifts = []
+        if dok34_delta > 5:
+            shifts.append(f"DOK 3+4 share grew {dok34_delta:.0f}pp - more reasoning and design in prompts")
+        dok2_b = dist_b.get('dok2', 0)
+        dok2_c = dist_c.get('dok2', 0)
+        if dok2_b - dok2_c > 10:
+            shifts.append(f"DOK 2 share dropped {dok2_b - dok2_c:.0f}pp - work that was explicit is now compressed or delegated")
+        if comp_c > comp_b + 3:
+            shifts.append("Compression growing - trust made visible in the data")
+        if tm_c > tm_b:
+            shifts.append(f"TM advanced from {self.TM_TIERS[tm_b]} to {self.TM_TIERS[tm_c]}")
+        if adt_b != adt_c:
+            shifts.append(f"Diagnostic zone moved: {adt_b} -> {adt_c}")
+
+        if not shifts:
+            shifts.append("Session is consistent with baseline patterns")
+
+        for s in shifts:
+            print(f"  . {s}")
+        print()
+
+        print("-" * 66)
+        print("Run /rp-why overall for full longitudinal analysis.")
+        print()
+
+    def print_overall_report(self, baseline: Dict, analysis: Dict, daily_scores: List[Dict]):
+        if 'error' in analysis:
+            print(f"\n{analysis.get('message', 'No data')}")
+            return
+
+        dims = baseline.get('three_dimensions', {})
+        tm_tier = dims.get('tm_tier', 2)
+        dok_adj = analysis['dok_adjusted']
+        adt_zone = self.calculate_adt_zone(dok_adj, tm_tier)
+
+        period = baseline.get('period', {})
+        start = period.get('start', '?')
+        end = period.get('end', '?')
+        days = period.get('days', 0)
+
+        # Rolling averages
+        first_10 = daily_scores[:10] if len(daily_scores) >= 10 else daily_scores[:len(daily_scores)//2]
+        last_10 = daily_scores[-10:] if len(daily_scores) >= 10 else daily_scores[len(daily_scores)//2:]
+
+        first_dok = sum(d['avg_dok'] for d in first_10) / len(first_10) if first_10 else 0
+        last_dok = sum(d['avg_dok'] for d in last_10) / len(last_10) if last_10 else 0
+        first_dok34 = sum(d['dok3_4_pct'] for d in first_10) / len(first_10) if first_10 else 0
+        last_dok34 = sum(d['dok3_4_pct'] for d in last_10) / len(last_10) if last_10 else 0
+
+        # Floor
+        all_doks = sorted([d['avg_dok'] for d in daily_scores])
+        floor = all_doks[len(all_doks) // 10] if len(all_doks) > 10 else (all_doks[0] if all_doks else 1.0)
+
+        # Peak
+        peak_day = max(daily_scores, key=lambda d: d['avg_dok']) if daily_scores else None
+
+        # Phases
+        phases = self.detect_phases(daily_scores)
+
+        print()
+        print("=" * 66)
+        print("                    rp-why . OVERALL")
+        print("=" * 66)
+        print()
+        print(f"FULL DATASET: {start} - {end} ({days} days)")
+        print(f"Sessions: {baseline.get('sessions_analyzed', 0)}  |  Prompts: {analysis['total_prompts']}")
+        print()
+
+        # Current Standings
+        print("CURRENT STANDINGS")
+        print("-" * 66)
+        print(f"DOK (Adjusted, full mean)    {dok_adj:.2f}")
+        print(f"TM  (Tool Maturity)          Tier {tm_tier} . {self.TM_TIERS[tm_tier]}")
+        print(f"ADT (Delegation Trust)       {adt_zone}")
+        print()
+        print(f"DOK 3+4:  {analysis['dok_3_4_pct']:.1f}%     Compression:  {analysis['compression_pct']:.1f}%     Floor:  {floor:.2f}")
+        print()
+
+        # Rolling Average
+        print("ROLLING AVERAGE (Last 10 vs. First 10)")
+        print("-" * 66)
+        dok_delta = ((last_dok - first_dok) / first_dok * 100) if first_dok > 0 else 0
+        dok34_delta = last_dok34 - first_dok34
+        print(f"{'':24} {'First 10':>12} {'Last 10':>12} {'':>10}")
+        print(f"{'Adjusted DOK':<24} {first_dok:>12.2f} {last_dok:>12.2f} {f'+{dok_delta:.1f}%' if dok_delta >= 0 else f'{dok_delta:.1f}%':>10}")
+        print(f"{'DOK 3+4 %':<24} {first_dok34:>11.1f}% {last_dok34:>11.1f}% {f'+{dok34_delta:.1f}pp' if dok34_delta >= 0 else f'{dok34_delta:.1f}pp':>10}")
+        print()
+
+        # Phase Analysis
+        if len(phases) > 1:
+            print("PHASE ANALYSIS")
+            print("-" * 66)
+            print(f"{'Phase':<16} {'Dates':<22} {'Sessions':>8} {'DOK':>6} {'DOK3+4':>8}")
+            print(f"{'-----':<16} {'-----':<22} {'--------':>8} {'---':>6} {'------':>8}")
+            for phase in phases:
+                dates = f"{phase['start']} - {phase['end'][-5:]}"
+                print(f"{phase['name']:<16} {dates:<22} {phase['sessions']:>8} {phase['avg_dok']:>6.2f} {phase['dok3_4_pct']:>7.1f}%")
+            print()
+
+        # Trajectory
+        print("TRAJECTORY")
+        print("-" * 66)
+        if peak_day:
+            print(f"Peak DOK:     {peak_day['avg_dok']:.2f} ({peak_day['date']})")
+        print(f"Floor:        {floor:.2f}")
+        trajectory = self.calculate_trajectory(daily_scores)
+        direction_map = {'improving': '^ Improving', 'declining': 'v Declining', 'stable': '= Stable'}
+        print(f"Direction:    {direction_map.get(trajectory, '? Insufficient data')}")
+        print()
+
+        # DOK Distribution
+        print("DOK DISTRIBUTION (Full Dataset)")
+        print("-" * 66)
+        dist = analysis['dok_distribution']
+        for i in range(1, 5):
+            pct = dist.get(f'dok{i}', 0)
+            bar = self.format_bar(pct)
+            print(f"DOK {i} ({self.DOK_NAMES_SHORT[i]:11}):  {bar}  {pct:5.1f}%")
+        print()
+
+        # Growth Story
+        print("GROWTH STORY")
+        print("-" * 66)
+        if trajectory == 'improving':
+            if analysis['compression_pct'] > 5:
+                print("The collaboration is deepening. Compression has emerged as a")
+                print("signal of trust - short directives now carry complex intent.")
+                print("The tool didn't get smarter. The relationship deepened.")
+            else:
+                print("DOK is trending upward. More strategic and extended thinking")
+                print("is appearing in the practice. The next signal to watch for is")
+                print("compression - when short prompts start carrying complex meaning.")
+        elif trajectory == 'declining':
+            print("DOK trending down may indicate execution-heavy work where cognitive")
+            print("complexity lives in the orchestration structure, not individual")
+            print("prompts. Check if TM tier has advanced - that's the complementary signal.")
+        else:
+            print("Stable DOK with consistent patterns. Growth may be happening in")
+            print("dimensions not captured by prompt text alone - orchestration depth,")
+            print("delegation trust, or domain breadth.")
+        print()
+
+        # Footer
+        print("-" * 66)
+        print(f"Data source: {self._get_sessions_db()}")
+        print("Methodology: DOK keyword classification, compression detection")
+        print("(short prompt + established context), adjusted DOK (+1 for")
+        print("compressed prompts, capped at 4).")
+        print()
 
 
 def main():
-    """CLI interface"""
     import sys
-    
-    analyzer = RPWhyBaseline()
-    
+
+    analyzer = RPWhyAnalyzer()
+
     if len(sys.argv) < 2:
-        print("Usage: python rp_why_baseline.py [init|compare|export|show]")
+        print("Usage: python rp_why_baseline.py [init|baseline|current|compare|overall|export|show]")
+        print()
+        print("Commands:")
+        print("  init / baseline   Generate baseline from session history")
+        print("  current           Analyze current/recent session")
+        print("  compare           Compare current to baseline")
+        print("  overall           Full longitudinal report")
+        print("  export            Export baseline as JSON")
+        print("  show              Show current baseline")
         sys.exit(1)
-    
+
     command = sys.argv[1].lower()
-    
+
+    # Alias: baseline == init
+    if command == 'baseline':
+        command = 'init'
+
     if command == 'init':
-        print("\n🔍 Analyzing your Goose session history...\n")
+        print("\nAnalyzing your Goose session history...\n")
         baseline = analyzer.generate_baseline()
-        
+
         if baseline and 'error' not in baseline:
             analyzer.save_baseline(baseline)
             analyzer.print_baseline_report(baseline)
         elif baseline:
-            print(f"\n❌ {baseline.get('message', 'Unknown error')}")
+            print(f"\n{baseline.get('message', 'Unknown error')}")
         else:
-            print("\n❌ Failed to generate baseline")
-    
+            print("\nFailed to generate baseline")
+
     elif command == 'show':
         baseline = analyzer.load_baseline()
         if baseline:
             analyzer.print_baseline_report(baseline)
         else:
-            print("\n❌ No baseline found. Run 'python rp_why_baseline.py init' first.")
-    
+            print("\nNo baseline found. Run 'python rp_why_baseline.py init' first.")
+
     elif command == 'export':
         baseline = analyzer.load_baseline()
         if baseline:
             print(json.dumps(baseline, indent=2))
         else:
-            print("\n❌ No baseline found. Run 'python rp_why_baseline.py init' first.")
-    
+            print("\nNo baseline found. Run 'python rp_why_baseline.py init' first.")
+
+    elif command == 'current':
+        if not analyzer.connect():
+            sys.exit(1)
+        try:
+            prompts = analyzer.get_all_user_prompts()
+            # Get last session's prompts
+            if prompts:
+                last_session_id = prompts[-1]['session_id']
+                session_prompts = [p for p in prompts if p['session_id'] == last_session_id]
+                analysis = analyzer.analyze_prompts(session_prompts)
+                session_meta = analyzer.get_session_metadata()
+                meta = session_meta.get(last_session_id, {})
+                analyzer.print_current_report(analysis, meta)
+            else:
+                print("\nNo prompts found in recent sessions.")
+        finally:
+            analyzer.close()
+
     elif command == 'compare':
         baseline = analyzer.load_baseline()
         if not baseline:
-            print("\n❌ No baseline found. Run 'python rp_why_baseline.py init' first.")
+            print("\nNo baseline found. Run 'python rp_why_baseline.py init' first.")
             sys.exit(1)
-        
-        # For compare, we'd need current session context
-        # This is typically called from within Goose with session data
-        print("\n⚠️  Compare command is designed to be run from within Goose.")
-        print("Use /rp-why compare in your Goose session for full comparison.")
-        print("\nShowing baseline summary for reference:")
-        print(f"  Baseline DOK: {baseline['average_dok_score']:.2f}")
-        print(f"  Stage: {baseline['estimated_stage']}")
-        print(f"  Sessions: {baseline['sessions_analyzed']}")
-    
+
+        if not analyzer.connect():
+            sys.exit(1)
+        try:
+            prompts = analyzer.get_all_user_prompts()
+            if prompts:
+                last_session_id = prompts[-1]['session_id']
+                session_prompts = [p for p in prompts if p['session_id'] == last_session_id]
+                current = analyzer.analyze_prompts(session_prompts)
+                analyzer.print_compare_report(baseline, current)
+            else:
+                print("\nNo prompts found in recent sessions.")
+        finally:
+            analyzer.close()
+
+    elif command == 'overall':
+        baseline = analyzer.load_baseline()
+        if not baseline:
+            print("\nNo baseline found. Run 'python rp_why_baseline.py init' first.")
+            sys.exit(1)
+
+        if not analyzer.connect():
+            sys.exit(1)
+        try:
+            prompts = analyzer.get_all_user_prompts()
+            if prompts:
+                analysis = analyzer.analyze_prompts(prompts)
+                daily_scores = analyzer.get_daily_breakdown(prompts)
+                analyzer.print_overall_report(baseline, analysis, daily_scores)
+            else:
+                print("\nNo prompts found.")
+        finally:
+            analyzer.close()
+
     else:
         print(f"Unknown command: {command}")
-        print("Usage: python rp_why_baseline.py [init|compare|export|show]")
+        print("Usage: python rp_why_baseline.py [init|baseline|current|compare|overall|export|show]")
         sys.exit(1)
 
 
 if __name__ == '__main__':
     main()
-
