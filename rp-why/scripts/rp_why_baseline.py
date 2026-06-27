@@ -1174,6 +1174,33 @@ class RPWhyAnalyzer:
             print(f"  . {s}")
         print()
 
+        # Growth Nudge
+        print("GROWTH NUDGE")
+        print("-" * 66)
+        nudges = {
+            'Frontier': 'Strong session. The collaboration is matched and productive.\nConsider extending one thread into a multi-session investigation.',
+            'Growing': 'Building momentum. Try framing one more task as a design\ndecision rather than an execution request.',
+            'Expected': 'Solid foundation. Ask "what are the trade-offs?" before your\nnext implementation prompt.',
+            'Thinking Ahead': 'Your thinking exceeds your tools. Try delegating a work\nstream to a sub-agent or multi-step workflow.',
+            'Underutilizing': 'Powerful tools available. Before each prompt: can this be\nmore strategic? Batch simple queries.',
+            'Overpowered': 'Consider whether this task needs an autonomous agent.\nRedirect toward problems requiring analysis or design.'
+        }
+        print(nudges.get(adt_c, ''))
+        print()
+
+        # Reflection
+        reflections = {
+            'Frontier': 'What complex challenge could benefit from sustained\n   exploration across your next few sessions?',
+            'Growing': 'What workflow could you delegate more fully to the agent?',
+            'Expected': 'What strategic question have you been avoiding?',
+            'Thinking Ahead': 'What tool or workflow would unlock the depth you are\n   already thinking at?',
+            'Underutilizing': 'What is the most strategic question you could ask right now?',
+            'Overpowered': 'Is there a harder problem this tool should be pointed at?'
+        }
+        reflection = reflections.get(adt_c, 'What could you explore more deeply?')
+        print(f"  {reflection}")
+        print()
+
         print("-" * 66)
         print("Run /rp-why overall for full longitudinal analysis.")
         print()
@@ -1304,6 +1331,35 @@ class RPWhyAnalyzer:
             print("Stable DOK with consistent patterns. Growth may be happening in")
             print("dimensions not captured by prompt text alone - orchestration depth,")
             print("delegation trust, or domain breadth.")
+        print()
+
+        # Growth Nudge
+        print("GROWTH NUDGE")
+        print("-" * 66)
+        nudges = {
+            'Frontier': 'Strong longitudinal pattern. The collaboration is matched and\nproductive. Consider extending one thread into a multi-session\ninvestigation or mentoring others in their AI collaboration practice.',
+            'Growing': 'Building momentum across sessions. Try framing one more task\nas a design decision rather than an execution request. Look for\nopportunities to delegate entire workflows.',
+            'Expected': 'Solid foundation established. Ask "what are the trade-offs?"\nbefore your next implementation prompt. Push one routine workflow\ninto full delegation.',
+            'Thinking Ahead': 'Your thinking consistently exceeds your tools. Try\ndelegating a work stream to a sub-agent or multi-step workflow.\nThe gap between your intent and tool capability is your growth edge.',
+            'Underutilizing': 'Powerful tools available but underused. Before each prompt:\ncan this be more strategic? Batch simple queries and look for\npatterns you can compress into single directives.',
+            'Overpowered': 'Consider whether these tasks need an autonomous agent.\nRedirect toward problems requiring analysis or design. The tool\nis capable of more than it is being asked to do.'
+        }
+        print(nudges.get(adt_zone, ''))
+        print()
+
+        # Reflection
+        print("REFLECTION")
+        print("-" * 66)
+        reflections = {
+            'Frontier': 'What complex challenge could benefit from sustained exploration\n  across your next few sessions? Where could you mentor others\n  in developing their own AI collaboration maturity?',
+            'Growing': 'What workflow could you delegate more fully to the agent?\n  What would it look like to trust the tool with an entire\n  work stream from start to finish?',
+            'Expected': 'What strategic question have you been avoiding? What would\n  change if you brought your hardest problem to the collaboration\n  instead of your most routine one?',
+            'Thinking Ahead': 'What tool or workflow would unlock the depth you are already\n  thinking at? What infrastructure investment would close the gap\n  between your intent and your execution surface?',
+            'Underutilizing': 'What is the most strategic question you could ask right now?\n  What would it look like to use this tool for thinking, not\n  just doing?',
+            'Overpowered': 'Is there a harder problem this tool should be pointed at?\n  What would it look like to match the tool capability with\n  a problem worthy of it?'
+        }
+        reflection = reflections.get(adt_zone, 'What could you explore more deeply?')
+        print(f"  {reflection}")
         print()
 
         # Footer
